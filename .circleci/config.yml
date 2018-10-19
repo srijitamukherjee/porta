@@ -322,8 +322,7 @@ jobs:
           name: Run cucumber tests
           command: |
             set -x
-            export RUBYOPT=-d
-            bundle exec cucumber --verbose --backtrace --profile list --profile default > tmp/cukes.txt
+            bundle exec cucumber --verbose --strict --backtrace --profile list --profile default > tmp/cukes.txt
             TESTS=$(circleci tests split --split-by=timings tmp/cukes.txt)
             bundle exec cucumber --profile ci ${TESTS}
       - run:
