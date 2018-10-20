@@ -58,6 +58,7 @@ system-builder: &system-builder
 
 jobs:
   dependencies_bundler:
+    resource_class: medium+
     docker:
       - *system-builder
     steps:
@@ -73,7 +74,7 @@ jobs:
             rm -rf "$BUNDLE_PATH/$(ruby -e 'puts Gem.ruby_engine')/$(ruby -e 'puts Gem.ruby_api_version')"/gems/capybara-webkit-*/src
           environment:
             BUNDLE_RETRY: 3
-            BUNDLE_JOBS: 3
+            BUNDLE_JOBS: 6
       - save_cache:
           key: v1-bundler-gems-{{ arch }}-{{ .Branch }}-{{ checksum "Gemfile.lock" }}
           paths:
