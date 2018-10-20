@@ -13,6 +13,9 @@ ENV["RAILS_ENV"] ||= 'test'
 require File.expand_path("../../config/environment", __FILE__)
 require 'rspec/rails'
 
+require 'knapsack_pro'
+KnapsackPro::Adapters::RSpecAdapter.bind
+
 # Require backend API stubbing
 require_relative '../test/test_helpers/backend'
 RSpec::Core::ExampleGroup.class_eval do

@@ -245,7 +245,7 @@ GEM
     ci_reporter (2.0.0)
       builder (>= 2.1.2)
     climate_control (0.2.0)
-    codecov (0.1.10)
+    codecov (0.1.13)
       json
       simplecov
       url
@@ -408,6 +408,8 @@ GEM
       addressable (~> 2.3)
     jwt (1.5.2)
     kgio (2.10.0)
+    knapsack_pro (1.0.0)
+      rake
     kubeclient (2.5.2)
       http (>= 0.98, < 3)
       recursive-open-struct (~> 1.0.0)
@@ -897,6 +899,7 @@ DEPENDENCIES
   json (~> 1.8.1)
   json-schema
   jwt (~> 1.5.2)
+  knapsack_pro
   kubeclient
   launchy
   license_finder (~> 2.1.2)
