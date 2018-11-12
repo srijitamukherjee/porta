@@ -47,6 +47,12 @@ system-builder: &system-builder
     BUNDLE_FROZEN: true
     BUNDLE_PATH: 'vendor/bundle'
 
+mysql-container: &mysql-container
+  image: circleci/mysql:5.7-ram
+  environment:
+    MYSQL_ALLOW_EMPTY_PASSWORD: yes
+    MYSQL_ROOT_PASSWORD: ''
+    MYSQL_DATABASE: circleci
 clone-oracle-libs: &clone-oracle-libs
   run:
     name: "Fetch oracle libraries"
@@ -122,11 +128,7 @@ jobs:
   lint:
     docker:
       - *system-builder
-      - image: circleci/mysql:5.7-ram
-        environment:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_ROOT_PASSWORD: ''
-          MYSQL_DATABASE: circleci
+      - *mysql-container
       - image: memcached:1.5-alpine
       - image: redis:4.0-alpine
     steps:
@@ -164,11 +166,7 @@ jobs:
     resource_class: small
     docker:
       - *system-builder
-      - image: circleci/mysql:5.7-ram
-        environment:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_ROOT_PASSWORD: ''
-          MYSQL_DATABASE: circleci
+      - *mysql-container
       - image: memcached:1.5-alpine
       - image: redis:4.0-alpine
     steps:
@@ -187,11 +185,7 @@ jobs:
     resource_class: small
     docker:
       - *system-builder
-      - image: circleci/mysql:5.7-ram
-        environment:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_ROOT_PASSWORD: ''
-          MYSQL_DATABASE: circleci
+      - *mysql-container
       - image: memcached:1.5-alpine
       - image: redis:4.0-alpine
     steps:
@@ -212,11 +206,7 @@ jobs:
     resource_class: small
     docker:
       - *system-builder
-      - image: circleci/mysql:5.7-ram
-        environment:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_ROOT_PASSWORD: ''
-          MYSQL_DATABASE: circleci
+      - *mysql-container
       - image: memcached:1.5-alpine
       - image: redis:4.0-alpine
     steps:
@@ -235,11 +225,7 @@ jobs:
     resource_class: small
     docker:
       - *system-builder
-      - image: circleci/mysql:5.7-ram
-        environment:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_ROOT_PASSWORD: ''
-          MYSQL_DATABASE: circleci
+      - *mysql-container
       - image: memcached:1.5-alpine
       - image: redis:4.0-alpine
     steps:
@@ -263,11 +249,7 @@ jobs:
         command:
         - --no-poll
         - --address=/#/127.0.0.1
-      - image: circleci/mysql:5.7-ram
-        environment:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_ROOT_PASSWORD: ''
-          MYSQL_DATABASE: circleci
+      - *mysql-container
       - image: memcached:1.5-alpine
       - image: redis:4.0-alpine
     steps:

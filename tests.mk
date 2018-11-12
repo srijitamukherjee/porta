@@ -1,7 +1,3 @@
-#test-prep:
-#	$(MAKE) init_db_with_deps test-with-info CMD="#{CMD}"
-#test-prep: bundle npm-install test-with-info
-
 ifeq ($(PROXY_ENABLED),true)
 rake_wrapper: CMD = sudo make dnsmasq_set && bundle exec rake $${JOB} --verbose --trace && sudo make dnsmasq_unset
 else
