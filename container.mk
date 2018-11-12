@@ -1,15 +1,15 @@
 
 all: clean-tmp test ## Cleans environment, builds docker image and runs tests
 
-boot_database:
+boot_database: bundle
+	if [ "x$$DB" = "xoracle" ]; then \
+		echo "Waiting for 300 seconds for the DB to be ready" ; \
+		sleep 300 ; \
+	fi
 	until bin/rake boot:database TEST_ENV_NUMBER=8 ; do \
 		sleep 1 ; \
 		echo -n "." ; \
 	done
-	if [ "x$$DB" = "xoracle" ]; then \
-		echo "Waiting for 60 seconds for the DB to be ready" ; \
-		sleep 60 ; \
-	fi
 
 clean-tmp: ## Removes temporary files
 	-@ $(foreach dir,$(TMP),rm -rf $(dir);)

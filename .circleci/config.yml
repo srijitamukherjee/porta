@@ -46,6 +46,12 @@ system-builder: &system-builder
   environment:
     BUNDLE_FROZEN: true
     BUNDLE_PATH: 'vendor/bundle'
+    DISABLE_SPRING: "true"
+    ORACLE_SYSTEM_PASSWORD: threescalepass
+    NLS_LANG: AMERICAN_AMERICA.UTF8
+    TZ: UTC
+    MASTER_PASSWORD: p
+    USER_PASSWORD: p
 
 mysql-container: &mysql-container
   image: circleci/mysql:5.7-ram
@@ -53,12 +59,32 @@ mysql-container: &mysql-container
     MYSQL_ALLOW_EMPTY_PASSWORD: yes
     MYSQL_ROOT_PASSWORD: ''
     MYSQL_DATABASE: circleci
+
+oracle-db-container: &oracle-db-container
+  image: quay.io/3scale/oracle:12.2.0.1-ee-scripted
+  auth:
+    username: $DOCKER_USER
+    password: $DOCKER_PASS
+  environment:
+    ORACLE_CHARACTERSET: 'AL32UTF8'
+    ORACLE_SID: 'threescale'
+    ORACLE_PDB: 'systempdb'
+    ORACLE_PWD: 'threescalepass'
+  command: |
+    bash -c "sed -i.bak 's|2048|6144|g' /opt/oracle/dbca.rsp.tmpl && exec /opt/oracle/runOracle.sh"
+
 clone-oracle-libs: &clone-oracle-libs
   run:
     name: "Fetch oracle libraries"
     command: |
       git clone git@github.com:3scale/system-libraries.git
       cp -R system-libraries/vendor/oracle/*.zip vendor/oracle
+      sudo unzip vendor/oracle/instantclient-basiclite-linux.x64-12.2.0.1.0.zip -d /opt/oracle
+      sudo unzip vendor/oracle/instantclient-sdk-linux.x64-12.2.0.1.0.zip -d /opt/oracle
+      sudo unzip vendor/oracle/instantclient-odbc-linux.x64-12.2.0.1.0-2.zip -d /opt/oracle
+      sudo ln -s /opt/oracle/instantclient_12_2/libclntsh.so.12.1 /opt/oracle/instantclient_12_2/libclntsh.so
+      sudo rm -rf /opt/system/vendor/oracle
+      rm -rf vendor/oracle/*.zip
 
 jobs:
   dependencies_bundler:
@@ -180,6 +206,31 @@ jobs:
       - *store-test-artifacts
       - *store-log-artifacts
       - *upload-coverage
+
+  unit-oracle:
+    parallelism: 4
+    resource_class: large
+    docker:
+      - *system-builder
+      - *oracle-db-container
+      - image: memcached:1.5-alpine
+      - image: redis:4.0-alpine
+    steps:
+      - checkout
+      - *git-submodules
+      - *attach-to-workspace
+      - add_ssh_keys:
+          fingerprints:
+          - "36:6a:7a:93:88:52:12:dd:4c:84:3a:42:bf:8c:c3:58"
+      - *clone-oracle-libs
+      - run:
+          name: Rails tests
+          command: make boot_database test-rake JOB="integrate:unit" DB=oracle
+      - *store-junit-test-results
+      - *store-test-artifacts
+      - *store-log-artifacts
+      - *upload-coverage
+
   functional:
     parallelism: 2
     resource_class: small
@@ -195,6 +246,31 @@ jobs:
       - run:
           name: Rails tests
           command: make test-rake JOB="integrate:functional"
+          environment:
+            LC_ALL: en_US.UTF-8
+      - *store-junit-test-results
+      - *store-test-artifacts
+      - *store-log-artifacts
+      - *upload-coverage
+  functional-oracle:
+    parallelism: 2
+    resource_class: large
+    docker:
+      - *system-builder
+      - *oracle-db-container
+      - image: memcached:1.5-alpine
+      - image: redis:4.0-alpine
+    steps:
+      - checkout
+      - *git-submodules
+      - *attach-to-workspace
+      - add_ssh_keys:
+          fingerprints:
+          - "36:6a:7a:93:88:52:12:dd:4c:84:3a:42:bf:8c:c3:58"
+      - *clone-oracle-libs
+      - run:
+          name: Rails tests
+          command: make boot_database test-rake JOB="integrate:functional" DB=oracle
           environment:
             LC_ALL: en_US.UTF-8
       - *store-junit-test-results
@@ -220,6 +296,29 @@ jobs:
       - *store-test-artifacts
       - *store-log-artifacts
       - *upload-coverage
+  integration-oracle:
+    parallelism: 6
+    resource_class: large
+    docker:
+      - *system-builder
+      - *oracle-db-container
+      - image: memcached:1.5-alpine
+      - image: redis:4.0-alpine
+    steps:
+      - checkout
+      - *git-submodules
+      - *attach-to-workspace
+      - add_ssh_keys:
+          fingerprints:
+          - "36:6a:7a:93:88:52:12:dd:4c:84:3a:42:bf:8c:c3:58"
+      - *clone-oracle-libs
+      - run:
+          name: Rails tests
+          command: make boot_database test-rake JOB="integrate:integration" DB=oracle
+      - *store-junit-test-results
+      - *store-test-artifacts
+      - *store-log-artifacts
+      - *upload-coverage
   rspec:
     parallelism: 3
     resource_class: small
@@ -235,6 +334,29 @@ jobs:
       - run:
           name: Rspec tests
           command: make test-rake JOB="integrate:rspec"
+      - *store-junit-test-results
+      - *store-test-artifacts
+      - *store-log-artifacts
+      - *upload-coverage
+  rspec-oracle:
+    parallelism: 4
+    resource_class: large
+    docker:
+      - *system-builder
+      - *oracle-db-container
+      - image: memcached:1.5-alpine
+      - image: redis:4.0-alpine
+    steps:
+      - checkout
+      - *git-submodules
+      - *attach-to-workspace
+      - add_ssh_keys:
+          fingerprints:
+          - "36:6a:7a:93:88:52:12:dd:4c:84:3a:42:bf:8c:c3:58"
+      - *clone-oracle-libs
+      - run:
+          name: Rspec tests
+          command: make boot_database test-rake JOB="integrate:rspec" DB=oracle
       - *store-junit-test-results
       - *store-test-artifacts
       - *store-log-artifacts
@@ -263,6 +385,41 @@ jobs:
           name: Restore internet access
           command: |
             sudo make dnsmasq_unset
+          when: always
+      - *store-junit-test-results
+      - *store-test-artifacts
+      - *store-log-artifacts
+      - store_artifacts:
+          path: tmp/capybara
+          destination: capybara
+      - *upload-coverage
+  cucumber-oracle:
+    parallelism: 30
+    resource_class: large
+    docker:
+      - *system-builder
+      - image: quay.io/mikz/dnsmasq
+        command:
+        - --no-poll
+        - --address=/#/127.0.0.1
+      - *mysql-container
+      - image: memcached:1.5-alpine
+      - image: redis:4.0-alpine
+    steps:
+      - checkout
+      - *git-submodules
+      - *attach-to-workspace
+      - add_ssh_keys:
+          fingerprints:
+          - "36:6a:7a:93:88:52:12:dd:4c:84:3a:42:bf:8c:c3:58"
+      - *clone-oracle-libs
+      - run:
+          name: Run cucumber javascript tests
+          command: make boot_database test-rake JOB="integrate:cucumber" PROXY_ENABLED=true DB=oracle
+      - run:
+          name: Restore internet access
+          command: |
+            make dnsmasq_unset
           when: always
       - *store-junit-test-results
       - *store-test-artifacts
@@ -343,24 +500,18 @@ workflows:
       - lint:
           requires:
             - assets_precompile
-      - unit:
+      - unit-oracle:
           requires:
             - dependencies_bundler
-      - functional:
+      - functional-oracle:
           requires:
             - assets_precompile
-      - integration:
+      - integration-oracle:
           requires:
             - assets_precompile
-      - rspec:
+      - rspec-oracle:
           requires:
             - dependencies_bundler
-      - cucumber_txn:
-          requires:
-            - assets_precompile
-      - cucumber_no_txn:
-          requires:
-            - assets_precompile
-      - cucumber_javascript:
+      - cucumber-oracle:
           requires:
             - assets_precompile
