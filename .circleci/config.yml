@@ -154,9 +154,9 @@ jobs:
   lint:
     docker:
       - *system-builder
-      - *mysql-container
-      - image: memcached:1.5-alpine
-      - image: redis:4.0-alpine
+#      - *mysql-container
+#      - image: memcached:1.5-alpine
+#      - image: redis:4.0-alpine
     steps:
       - run:
           name: Start Xvfb
@@ -208,7 +208,7 @@ jobs:
       - *upload-coverage
 
   unit-oracle:
-    parallelism: 4
+    parallelism: 6
     resource_class: large
     docker:
       - *system-builder
@@ -402,7 +402,7 @@ jobs:
         command:
         - --no-poll
         - --address=/#/127.0.0.1
-      - *mysql-container
+      - *oracle-db-container
       - image: memcached:1.5-alpine
       - image: redis:4.0-alpine
     steps:

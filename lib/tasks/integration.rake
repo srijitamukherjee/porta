@@ -114,7 +114,10 @@ namespace :integrate do
   # Dynamically generate all tasks from test_commands
   orchestration_helpers.test_commands(test_groups).each_key do |command|
     desc "Runs tests with #{command}"
-    task command.to_s => :prepare do
+    task command.to_s do
+
+      Rake::Task['integrate:prepare'].invoke unless command.to_s == 'frontend'
+
       success = "#{Color::GREEN}SUCCESS#{Color::CLEAR_COLOR}"
       failure = "#{Color::RED}FAILURE#{Color::CLEAR_COLOR}"
       banner = orchestration_helpers.print_banner_around
