@@ -85,6 +85,7 @@ clone-oracle-libs: &clone-oracle-libs
       sudo ln -s /opt/oracle/instantclient_12_2/libclntsh.so.12.1 /opt/oracle/instantclient_12_2/libclntsh.so
       sudo rm -rf /opt/system/vendor/oracle
       rm -rf vendor/oracle/*.zip
+      sudo cp config/oracle/*.ini /etc/
 
 jobs:
   dependencies_bundler:
