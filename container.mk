@@ -15,10 +15,10 @@ clean-tmp: ## Removes temporary files
 	-@ $(foreach dir,$(TMP),rm -rf $(dir);)
 
 dnsmasq_set:
-	echo "nameserver $$DNSMASQ_PORT_53_TCP_ADDR" > resolv.conf.dnsmasq && sudo cp /etc/resolv.conf /etc/resolv.conf.dist && sudo cp resolv.conf.dnsmasq /etc/resolv.conf
+	echo "nameserver $$DNSMASQ_PORT_53_TCP_ADDR" > resolv.conf.dnsmasq && cp /etc/resolv.conf /etc/resolv.conf.dist && cp resolv.conf.dnsmasq /etc/resolv.conf
 
 dnsmasq_unset:
-	sudo cp /etc/resolv.conf.dist /etc/resolv.conf
+	cp /etc/resolv.conf.dist /etc/resolv.conf
 
 info: jenkins-env # Prints relevant environment info
 

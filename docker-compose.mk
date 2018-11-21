@@ -78,9 +78,9 @@ clean: $(DOCKER_COMPOSE)
 	- $(DOCKER_COMPOSE) rm --force -v $(SERVICES)
 	- docker rm --force --volumes $(PROJECT)-build $(PROJECT)-build-run 2> /dev/null
 	- $(foreach service,$(SERVICES),docker rm --force --volumes $(PROJECT)-$(service) 2> /dev/null;)
-	- sudo groupadd --gid 1042 3scale-dev
-	- sudo chown -R :1042 .
-	- sudo chmod -R 775 .
+	- groupadd --gid 1042 3scale-dev
+	- chown -R :1042 .
+	- chmod -R 775 .
 	- umask 0000
 
 clean-tmp: COMPOSE_FILE = $(COMPOSE_TEST_FILE)
@@ -157,6 +157,6 @@ test-with-info: $(DOCKER_COMPOSE) info
 tmp-export: # Copies files from inside docker container to local tmp folder.
 tmp-export: IMAGE ?= $(PROJECT)-build
 tmp-export:
-	-@ sudo chmod g+w . && $(foreach dir,$(TMP),rm -rf $(dir) || true;)
+	-@ chmod g+w . && $(foreach dir,$(TMP),rm -rf $(dir) || true;)
 	-@ $(foreach dir,$(TMP),docker cp $(IMAGE):/opt/system/$(dir) $(dir) 2>/dev/null;)
 

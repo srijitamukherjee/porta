@@ -280,7 +280,7 @@ jobs:
       - run:
           name: Restore internet access
           command: |
-            make dnsmasq_unset
+            sudo make dnsmasq_unset
           when: always
       - *store-junit-test-results
       - *store-test-artifacts
