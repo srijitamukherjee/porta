@@ -73,12 +73,12 @@ gem 'htmlentities', '~>4.3', '>= 4.3.4'
 gem 'inherited_resources', '~> 1.7.2'
 gem 'json', '~> 1.8.1'
 
-case ENV.fetch('DATABASE', 'mysql')
-when 'postgresql'
-  gem 'pg'
-when 'mysql'
-  gem 'mysql2', '~>0.3.11'
+gem 'mysql2', '~>0.3.11'
+
+postgresql = lambda do
+  ENV['DB'] == 'postgresql'
 end
+gem 'pg', '~> 0.21.0', install_if: postgresql
 
 gem '3scale_client', '~> 2.6.1', require: false
 gem 'analytics-ruby', require: false

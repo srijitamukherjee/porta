@@ -28,6 +28,10 @@ module System
       adapter_method.mysql2_connection?
     end
 
+    def postgresql?
+      adapter_method.postgresql_connection?
+    end
+
     # Just adding another connection to the pool so we do not mess up with the primary connection
     # And just forget about it after
     class ConnectionProbe < ActiveRecord::Base
