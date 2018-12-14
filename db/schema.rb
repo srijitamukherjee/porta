@@ -136,7 +136,7 @@ ActiveRecord::Schema.define(version: 20181210222627) do
     t.integer  "account_id",               limit: 8
     t.integer  "tenant_id",                limit: 8
     t.string   "name",                     limit: 255
-    t.text     "body",                     limit: 4294967295
+    t.text     "body",                     limit: 1073741823
     t.text     "description",              limit: 65535
     t.boolean  "published",                                   default: false
     t.datetime "created_at"
@@ -660,7 +660,7 @@ ActiveRecord::Schema.define(version: 20181210222627) do
     t.integer  "version",         limit: 4
     t.string   "name",            limit: 255
     t.string   "slug",            limit: 255
-    t.text     "body",            limit: 4294967295
+    t.text     "body",            limit: 1073741823
     t.datetime "created_at"
     t.datetime "updated_at"
     t.boolean  "published",                          default: false
@@ -677,7 +677,7 @@ ActiveRecord::Schema.define(version: 20181210222627) do
     t.integer  "lock_version",  limit: 4,          default: 0
     t.string   "name",          limit: 255
     t.string   "slug",          limit: 255
-    t.text     "body",          limit: 4294967295
+    t.text     "body",          limit: 1073741823
     t.datetime "created_at"
     t.datetime "updated_at"
     t.boolean  "published",                        default: false
@@ -907,7 +907,7 @@ ActiveRecord::Schema.define(version: 20181210222627) do
     t.integer  "issuer_id",             limit: 8,                                                   null: false
     t.string   "name",                  limit: 255
     t.string   "rights",                limit: 255
-    t.text     "full_legal",            limit: 4294967295
+    t.text     "full_legal",            limit: 1073741823
     t.decimal  "cost_per_month",                           precision: 20, scale: 4, default: 0.0,   null: false
     t.integer  "trial_period_days",     limit: 4
     t.datetime "created_at"
