@@ -801,7 +801,7 @@ namespace :multitenant do
       elsif System::Database.mysql?
         Rake::Task['multitenant:triggers:mysql'].invoke
       else
-        raise 'unsupported database triggers'
+        warn 'unsupported database triggers'
       end
     end
 
