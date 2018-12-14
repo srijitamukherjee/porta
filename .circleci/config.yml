@@ -95,6 +95,7 @@ postgres-container: &postgres-container
   image: circleci/postgres:11-alpine
   environment:
     POSTGRES_DB: circleci
+    POSTGRES_USER: root
 
 clone-oracle-libs: &clone-oracle-libs
   run:
