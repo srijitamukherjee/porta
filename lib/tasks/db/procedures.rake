@@ -112,7 +112,7 @@ namespace :db do
       elsif System::Database.mysql?
         Rake::Task['db:procedures:mysql'].invoke
       else
-        raise 'unsupported database procedures'
+        warn 'unsupported database procedures'
       end
     end
 
