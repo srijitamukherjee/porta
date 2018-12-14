@@ -741,7 +741,7 @@ workflows:
       - rspec:
           context: postgres
           requires:
-            - dependencies_bundler_pg
+            - dependencies_bundler
       - cucumber:
           context: postgres
           requires:
