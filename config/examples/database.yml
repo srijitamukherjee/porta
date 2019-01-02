@@ -21,10 +21,10 @@ test:
 default: &DEFAULT
   adapter: postgresql
   encoding: unicode
-  username: systemdb
+  username: root
   password:
-  database: preview01
-  host:
+  database: circleci
+  host: <%= ENV.fetch('DB_PORT_3306_TCP_ADDR') { ENV['DB_PORT'] ? 'db' : ENV['DB_HOST'] } || '127.0.0.1' %>
   time_zone: 'UTC'
   pool: <%= ENV.fetch('RAILS_MAX_THREADS', 25) %>
 
