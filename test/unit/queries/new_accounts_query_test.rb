@@ -72,6 +72,8 @@ class NewAccountsQueryTest < ActiveSupport::TestCase
 
   class WithinTimeframeTest < self
 
+    disable_transactional_fixtures!
+
     def setup
       super
 

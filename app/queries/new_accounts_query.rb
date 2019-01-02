@@ -19,41 +19,21 @@ class NewAccountsQuery
   end
 
   def query(range, granularity:)
-    method(System::Database.oracle? ? :oracle_query : :mysql_query)
-        .call(range, granularity_to_date_format(granularity))
-  end
-
-  def oracle_query(range, date_format)
-    time_zone = Time.zone
-
-    begin
-      oracle_subquery(range, date_format, time_zone.tzinfo.name)
-      # Oracle can't rescue invalid time zone conversion
-    rescue ActiveRecord::StatementInvalid
-      oracle_subquery(range, date_format, time_zone.formatted_offset)
-    end
-  end
-
-  def oracle_subquery(range, date_format, timezone)
-    query = account.buyer_accounts.where.has do
-      sift(:date, sift(:in_timezone, created_at, name: timezone)).in(range)
-    end
-
-    query = query.selecting do
-      [
-        id,
-        sift(:date_format, sift(:in_timezone, created_at, name: timezone), date_format).as('dategrouping')
-      ]
-    end
-
-    Account.from(query, 'subquery').group('dategrouping').count('subquery.id')
+    method_name = "#{System::Database.adapter}_query".to_sym
+    date_format = granularity_to_date_format(granularity)
+    method(method_name).call(range, date_format)
   end
 
   def mysql_query(range, date_format)
-    account.buyer_accounts
-        .where.has { sift(:date, sift(:in_timezone, created_at)).in(range) }
-        .grouping { sift(:date_format, sift(:in_timezone, created_at), date_format).to_sql }
-        .count(:id)
+    mysql_subquery(range, date_format)
+  end
+
+  def postgres_query(range, date_format)
+    query_with_offset_retry(range, date_format, &method(:mysql_subquery))
+  end
+
+  def oracle_query(range, date_format)
+    query_with_offset_retry(range, date_format, &method(:oracle_subquery))
   end
 
   private
@@ -70,6 +50,38 @@ class NewAccountsQuery
       '%Y-%m-%dT%H'
     else
       raise "Unknown granularity #{granularity.inspect}"
+    end
+  end
+
+  def mysql_subquery(range, date_format, timezone: Time.zone.tzinfo.name)
+    account.buyer_accounts
+        .where.has { sift(:date, sift(:in_timezone, created_at, name: timezone)).in(range) }
+        .grouping { sift(:date_format, sift(:in_timezone, created_at, name: timezone), date_format).to_sql }
+        .count(:id)
+  end
+
+  def oracle_subquery(range, date_format, timezone: Time.zone.tzinfo.name)
+    query = account.buyer_accounts.where.has do
+      sift(:date, sift(:in_timezone, created_at, name: timezone)).in(range)
+    end
+
+    query = query.selecting do
+      [
+        id,
+        sift(:date_format, sift(:in_timezone, created_at, name: timezone), date_format).as('dategrouping')
+      ]
+    end
+
+    Account.from(query, 'subquery').group('dategrouping').count('subquery.id')
+  end
+
+  def query_with_offset_retry(range, date_format)
+    time_zone = Time.zone
+
+    begin
+      yield range, date_format, timezone: time_zone.tzinfo.name
+    rescue ActiveRecord::StatementInvalid
+      yield range, date_format, timezone: time_zone.formatted_offset
     end
   end
 end

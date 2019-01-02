@@ -16,6 +16,10 @@ module System
       resolver.spec(spec)
     end
 
+    def adapter
+      adapter_method.match(/^(oracle|postgres|mysql).*/).to_a.last
+    end
+
     def adapter_method
       ActiveSupport::StringInquirer.new(configuration_specification.adapter_method)
     end
@@ -31,6 +35,8 @@ module System
     def postgresql?
       adapter_method.postgresql_connection?
     end
+
+    alias postgres? postgresql?
 
     # Just adding another connection to the pool so we do not mess up with the primary connection
     # And just forget about it after
