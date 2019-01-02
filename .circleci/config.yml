@@ -239,7 +239,8 @@ commands: # reusable commands with parameters
       - run:
           name: Run Rails tests
           command: |
-            TESTS=$(bundle exec rake "test:files:${CIRCLE_JOB%-oracle}" | circleci tests split --split-by=timings)
+            shopt -s extglob
+            TESTS=$(bundle exec rake "test:files:${CIRCLE_JOB%-@(postgres|oracle)}" | circleci tests split --split-by=timings)
             bundle exec rake test:run TESTS="$TESTS" TESTOPTS=--verbose --verbose --trace
       - upload-artifacts
 
@@ -452,7 +453,6 @@ jobs:
       - rails-tests:
           extra-deps:
             - clone-oracle-libraries
-
 
   integration:
     parallelism: 8
