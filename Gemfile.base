@@ -106,7 +106,7 @@ gem 'faraday_middleware'
 gem 'rails_event_store', '~> 0.9.0'
 gem 'paperclip', '~> 5.3.0'
 gem 'zip-zip', require: false
-gem 'rubyzip', '~>1.1.7', require: false
+gem 'rubyzip', '~>1.2.2', require: false
 gem 'prawn-core', git: 'https://github.com/3scale/prawn.git', branch: '0.5.1-3scale'
 gem 'prawn-format', '0.2.1'
 gem 'prawn-layout', '0.2.1'
@@ -216,8 +216,6 @@ group :test do
   gem 'cucumber', '~>2.0'
   gem 'cucumber-rails', require: false
   gem 'email_spec', require: false
-  gem 'factory_girl', '~>2.6.4' # versions 3.0 and up are for ruby 1.9 only
-  gem 'factory_girl_rails'
   gem 'fakefs', '~>0.4.2', require: 'fakefs/safe'
   gem 'fakeweb', git: 'https://github.com/3scale/fakeweb.git', ref: '6c9392c03879b85b06b0d8f6dbabe75e69b7abb7', require: false
   gem 'webmock', '~> 1.21', require: false
@@ -229,10 +227,10 @@ group :test do
 
   gem 'equivalent-xml', require: false
 
-  gem 'rspec-rails', require: false # version 3 and up require capybara >= 2.2
+  gem 'rspec-rails', '~> 3.8', require: false # version 3 and up require capybara >= 2.2
 
   # Reason to use the fork: https://github.com/kucaahbe/rspec-html-matchers/pull/21
-  gem 'rspec-html-matchers', github: '3scale/rspec-html-matchers', require: false
+  gem 'rspec-html-matchers', github: '3scale/rspec-html-matchers', branch: 'fix/rspec-3-with-xml-document', require: false
   gem 'rspec_api_documentation'
 
   gem 'shoulda', '~> 3.5.0', require: false
@@ -257,10 +255,11 @@ group :test do
   gem 'ruby-prof'
 
   gem 'percy-capybara', '~> 2.5.1', require: false
-  gem 'm', '~> 1.5.0' # To be removed in rails 5.0
+  gem 'm', '~> 1.5.1' # To be removed in rails 5.0
 end
 
 group :development, :test do
+  gem 'factory_bot_rails', '~> 4.11.1'
   gem 'unicorn-rails'
 
   gem 'pry-rails'
