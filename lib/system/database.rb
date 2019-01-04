@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 require 'active_support/string_inquirer'
-require 'system/database/triggers'
-require 'system/database/procedures'
+require 'system/database/trigger'
+require 'system/database/procedure'
+
 module System
   module Database
     class ConnectionError < ActiveRecord::NoDatabaseError; end
@@ -32,11 +33,9 @@ module System
       adapter_method.mysql2_connection?
     end
 
-    def postgresql?
+    def postgres?
       adapter_method.postgresql_connection?
     end
-
-    alias postgres? postgresql?
 
     # Just adding another connection to the pool so we do not mess up with the primary connection
     # And just forget about it after
@@ -125,6 +124,40 @@ module System
       end
     end
 
+    module Definitions
+      extend ActiveSupport::Concern
+
+      included do
+        @triggers = []
+        @procedures = []
+
+        class << self
+          attr_reader :triggers, :procedures
+
+          def define(&block)
+            @triggers.clear
+            @procedures.clear
+
+            class_eval &block
+          end
+
+          def trigger(name, options = {})
+            klass_name = "System::Database::#{ancestors.first.to_s.demodulize}::Trigger"
+            args = [name, yield]
+            if variables = options[:with_variables].presence
+              klass_name += 'WithVariables'
+              args << variables
+            end
+            @triggers << klass_name.constantize.new(*args)
+          end
+
+          def procedure(name, parameters = {}, options = {})
+            klass_name = "System::Database::#{ancestors.first.to_s.demodulize}::Procedure"
+            @procedures << klass_name.constantize.new(name, yield, parameters)
+          end
+        end
+      end
+    end
   end
 end
 
@@ -138,7 +171,7 @@ if System::Database.oracle? && defined?(ActiveRecord::ConnectionAdapters::Oracle
         connection.execute "GRANT create procedure TO #{username}"
       end
 
-              protected
+      protected
 
       def username
         @config['username']
