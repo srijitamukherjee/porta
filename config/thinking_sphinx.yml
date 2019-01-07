@@ -29,7 +29,7 @@ test: &test
    when 'oracle' %>
   sql_port: 1521
 <% when 'postgresql' %>
-  sql_port: 1532
+  sql_port: 5432
 <% else %>
   mysql41:            <%= 9313 + ENV['TEST_ENV_NUMBER'].to_i %>
 <% end %>

@@ -17,15 +17,20 @@ ThinkingSphinx::Index.define(:account,
   has :provider_account_id
   has :tenant_id
 
-  if System::Database.oracle?
+  case System::Database.adapter.to_sym
+  when :oracle
     # FIXME: creating a CRC32 in Oracle needs a custom function ...
     # As we only have few values, I suppose ORA_HASH is enough
     has 'ORA_HASH(accounts.state)', as: :state, type: :integer
     # Need to add the group by otherwise it will complain about ORA-00979 not a Group By function error
     group_by "accounts.state"
-  else
+    where 'COALESCE(accounts.master, 0) = 0'
+  when :mysql
     has 'CRC32(accounts.state)', as: :state, type: :integer
+    where 'COALESCE(accounts.master, 0) = 0'
+  when :postgres
+    has 'MD5(accounts.state)', as: :state, type: :integer
+    where 'COALESCE(accounts.master, TRUE) = TRUE'
   end
 
-  where 'COALESCE(accounts.master, 0) = 0'
 end
