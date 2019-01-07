@@ -8,7 +8,7 @@ class DashboardWidgetPresenter
 
   def initialize(name, params = {})
     @name = name
-    @params = params.freeze
+    @params = params.respond_to?(:permit!) ? params.dup.permit!.freeze : params.freeze
     @data = nil
     @value = spinner
     @previous_value = nil
@@ -41,7 +41,7 @@ class DashboardWidgetPresenter
   end
 
   def id
-    "dashboard-widget-#{params.to_a.join('-')}#{name}"
+    "dashboard-widget-#{params.to_h.to_a.join('-')}#{name}"
   end
 
   def template_name

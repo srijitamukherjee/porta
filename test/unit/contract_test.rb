@@ -6,7 +6,7 @@ class ContractTest < ActiveSupport::TestCase
 
   def test_plan_changed_is_notified_after_commit
     plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
-    contract = FactoryBot.create(:contract, :plan => plan)
+    contract = FactoryBot.create(:account_contract, :plan => plan)
 
     other_plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
 
@@ -23,7 +23,7 @@ class ContractTest < ActiveSupport::TestCase
 
   def test_plan_changed_is_notified_just_once
     plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
-    contract = FactoryBot.create(:contract, :plan => plan)
+    contract = FactoryBot.create(:account_contract, :plan => plan)
 
     ## explicit transaction
     other_plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
@@ -37,7 +37,7 @@ class ContractTest < ActiveSupport::TestCase
     end
 
     ## just save
-    other_contract = FactoryBot.create(:contract, :plan => plan)
+    other_contract = FactoryBot.create(:account_contract, :plan => plan)
 
     other_contract.expects(:notify_observers).with(:plan_changed).once
     other_contract.expects(:notify_observers).with(:bill_variable_for_plan_changed, kind_of(Plan)).once
@@ -82,7 +82,8 @@ class ContractTest < ActiveSupport::TestCase
 
     contract.bill_for(month, invoice)
 
-    assert_equal month.end.to_time.end_of_day, contract.paid_until
+    # Because DB value do not have fraction of seconds but Time.zone.now does
+    assert_in_delta month.end.to_time.end_of_day, contract.paid_until, 1.second
   end
 
   def test_billable

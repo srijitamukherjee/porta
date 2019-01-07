@@ -2,6 +2,7 @@
 class Plan < ApplicationRecord
   include ThreeScale::Search::Scopes
   class PeriodRangeCalculationError < StandardError; end
+  include Symbolize
 
   self.allowed_sort_columns = %w[position name state contracts_count]
   self.default_sort_column = :position
@@ -381,7 +382,7 @@ class Plan < ApplicationRecord
 
       xml.setup_fee setup_fee
       xml.cost_per_month cost_per_month
-      xml.trial_period_days trial_period_days
+      xml.trial_period_days trial_period_days.to_i
       xml.cancellation_period cancellation_period
     end
 

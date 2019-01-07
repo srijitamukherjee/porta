@@ -1,14 +1,12 @@
-require File.expand_path('../boot', __FILE__)
+# frozen_string_literal: true
+require_relative 'boot'
 
 require 'rails/all'
-# If you have a Gemfile, require the gems listed there, including any gems
-# you've limited to :test, :development, or :production.
-if defined?(Bundler)
-  # If you precompile assets before deploying to production, use this line
-  Bundler.require *Rails.groups(:assets => %w(development production preview test))
-  # If you want your assets lazily compiled in production, use this line
-  # Bundler.require(:default, :assets, Rails.env)
-end
+
+# If you precompile assets before deploying to production, use this line
+Bundler.require *Rails.groups(:assets => %w(development production preview test))
+# If you want your assets lazily compiled in production, use this line
+# Bundler.require(:default, :assets, Rails.env)
 
 ActiveSupport::XmlMini.backend = 'Nokogiri'
 
@@ -34,10 +32,15 @@ module System
   mattr_accessor :redis
 
   class Application < Rails::Application
+    def config_for(*args)
+      config = super
+      return config unless config.is_a?(Hash)
+      config.with_indifferent_access
+    end
 
     def simple_try_config_for(*args)
       config_for(*args)
-    rescue ConfigFor::ReadError, ConfigFor::MissingEnvironmentError => error
+    rescue => error
       warn "[Warning][ConfigFor] Failed to load config with: #{error}" if $VERBOSE
       nil
     end
@@ -65,8 +68,13 @@ module System
     # Application configuration should go into files in config/initializers
     # -- all .rb files in that directory are automatically loaded.
 
+    # FIXME: [rails 5.x] In order to make it thread-safe, please do:
+    # - remove `config.enable_dependency_loading = true`
+    # - remove `config.autoload_paths += %W(#{config.root.join('lib')})`
+    # - put all the constants that needs to be loaded in app/lib so they can be `eager_load!`
     # Custom directories with classes and modules you want to be autoloadable.
     config.autoload_paths += %W(#{config.root.join('lib')})
+    config.enable_dependency_loading = true
 
     # Only load the plugins named here, in the order given (default is alphabetical).
     # :all can be used as a placeholder for all plugins not explicitly named.
@@ -104,8 +112,8 @@ module System
     config.assets.enabled = true
 
     config.assets.precompile = []
-    config.assets.precompile << ->(path) do
-      basename = File.basename(path)
+    config.assets.precompile << ->(filename, _path) do
+      basename = File.basename(filename)
 
       extname = File.extname(basename)
 
@@ -123,10 +131,10 @@ module System
     config.assets.digest = true
     config.assets.initialize_on_precompile = false
 
-    config.assets.version = 1437647386 # unix timestamp
+    config.assets.version = '1437647386' # unix timestamp
 
 
-    config.serve_static_files = false
+    config.public_file_server.enabled = false
 
     # We don't want Rack::Cache to be used
     config.action_dispatch.rack_cache = false
@@ -212,6 +220,7 @@ module System
 
     require 'three_scale/middleware/multitenant'
     require 'three_scale/middleware/dev_domain'
+
     config.middleware.use ThreeScale::Middleware::Multitenant, :tenant_id
     config.middleware.use ThreeScale::Middleware::DevDomain, config.three_scale.dev_domain_regexp, config.three_scale.dev_domain_replacement if config.three_scale.dev_domain
     config.middleware.insert_before Rack::Runtime, Rack::UTF8Sanitizer
@@ -252,6 +261,8 @@ module System
       require 'system/redis_pool'
       System.redis = System::RedisPool.new(config.redis)
     end
+
+    config.assets.quiet = true
 
     initializer :jobs do
       # Loading jobs used by Whenever
