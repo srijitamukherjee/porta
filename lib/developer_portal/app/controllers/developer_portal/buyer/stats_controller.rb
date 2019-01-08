@@ -4,8 +4,6 @@ class DeveloperPortal::Buyer::StatsController < DeveloperPortal::BaseController
   liquify prefix: 'stats'
 
   def index
-    @cinstances = applications
-
     if applications.present?
       assign_drops metrics: Liquid::Drops::Metric.wrap(metrics),
       methods: Liquid::Drops::Metric.wrap(methods),
@@ -33,7 +31,7 @@ class DeveloperPortal::Buyer::StatsController < DeveloperPortal::BaseController
   private
 
   def applications
-    @applications ||= current_account.bought_cinstances.live
+    @applications ||= current_account.bought_cinstances.live.order(:id)
   end
 
   def application
