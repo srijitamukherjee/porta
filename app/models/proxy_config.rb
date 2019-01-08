@@ -39,7 +39,7 @@ class ProxyConfig < ApplicationRecord
       .when_having { max(table.version) == version }
       .group(:id)
 
-    System::Database.oracle? ? where(id: scope.group(:version).select(:id)) : scope
+    System::Database.mysql? ? scope : where(id: scope.group(:version).select(:id))
   end
 
   def differs_from?(comparable)
@@ -91,7 +91,7 @@ class ProxyConfig < ApplicationRecord
     config.update_all("version = 1 + (#{Arel.sql max_version.to_sql})")
 
     # Read the value
-    version = config.connection.select_value(config.select(:version))
+    version = config.connection.select_value(config.select(:version))&.to_i
     raw_write_attribute :version, version
   end
 
