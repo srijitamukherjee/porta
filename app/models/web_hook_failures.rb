@@ -50,7 +50,8 @@ class WebHookFailures
   # reads all elements in the list
   #
   def all
-    _all.map { |e| WebHook::Failure.parse(e) }
+    collection = _all.map { |e| WebHook::Failure.parse(e) }
+    System::Database.postgres? ? collection.sort_by(&:id) : collection
   end
 
   def to_xml(options = {})

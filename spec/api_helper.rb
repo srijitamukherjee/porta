@@ -25,11 +25,25 @@ module NamingHelper
 end
 
 module ApiHelper
-
   module Resource
     def resource(alias_name = nil, &block)
       let(:resource, &block)
       let(alias_name) { resource } if alias_name
+    end
+  end
+
+  module Collection
+    def sorted_collection(collection, by: :id)
+      return collection unless System::Database.postgres?
+
+      case collection
+      when ActiveRecord::Relation
+        collection.order(by)
+      when Array
+        collection.replace(collection.sort_by(&by))
+      else
+        collection
+      end
     end
   end
 
@@ -56,7 +70,6 @@ module ApiHelper
 
         code = contexts[:status] || 200
         status.should == code
-
       end
     end
   end
@@ -127,6 +140,7 @@ RSpec.configure do |config|
   config.extend ApiHelper, api_doc_dsl: :resource
   config.extend ApiHelper::Request, api_doc_dsl: :endpoint
   config.extend ApiHelper::Resource, serialize: :resource
+  config.include ApiHelper::Collection
 end
 
 require 'equivalent-xml/rspec_matchers'

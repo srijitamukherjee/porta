@@ -9,7 +9,7 @@ resource "ServicePlan" do
 
   api 'service plan' do
     get "/admin/api/services/:service_id/service_plans.:format", action: :index do
-      let(:serializable) { [service.service_plans.first, resource ]}
+      let(:serializable) { [service.service_plans.order(:id).first, resource ]}
     end
 
     get "/admin/api/services/:service_id/service_plans/:id.:format", action: :show
