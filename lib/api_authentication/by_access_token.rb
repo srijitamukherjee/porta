@@ -169,6 +169,7 @@ module ApiAuthentication
       rescue ActiveRecord::StatementInvalid => error
         case error.message
         when /Cannot execute statement in a READ ONLY transaction/,
+             /cannot execute .+ in a read-only transaction/,
              %r{may not perform insert/delete/update operation inside a READ ONLY transaction},
              /READ ONLY transaction/
           fail PermissionError, error.message, caller
