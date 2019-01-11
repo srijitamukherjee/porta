@@ -13,7 +13,6 @@
 .rvmrc
 .deploy_info
 .ruby-gemset
-.ruby-version
 .pt
 .pivotalrc
 .pivotal_cache
@@ -128,3 +127,6 @@ Gemfile.local
 /node_modules
 
 /vendor/oracle/*.zip
+
+# IDE local settings
+.vscode
