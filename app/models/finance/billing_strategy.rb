@@ -172,13 +172,12 @@ class Finance::BillingStrategy < ApplicationRecord
     #  respectively to monthly billing friendly ids (YYYY-MM-########) and to yearly billing friendly ids (YYYY-########)
     invoice_prefix = period.to_param[0..(billing_monthly? ? 6 : 3)]
 
-    InvoiceCounter.create(provider_account: account, invoice_prefix: invoice_prefix, invoice_count: 0)
+    InvoiceCounter.transaction(requires_new: true) do
+      InvoiceCounter.create(provider_account: account, invoice_prefix: invoice_prefix, invoice_count: 0)
+    end
   rescue ActiveRecord::RecordNotUnique
-    connection.execute('ROLLBACK') if System::Database.postgres? && connection.open_transactions.positive?
     InvoiceCounter.find_by(provider_account: account, invoice_prefix: invoice_prefix)
   end
-
-  delegate :connection, to: 'ActiveRecord::Base'
 
   # TODO: Remove. See https://github.com/3scale/system/pull/9360
   def next_available_friendly_id(month, step = 1)
