@@ -7,7 +7,7 @@ class Buyers::ApplicationsHelperTest < ActionView::TestCase
     service_ids = []
     service_ids << FactoryBot.create(:service_contract, user_account: buyer).service.id
     service_ids << FactoryBot.create(:service_contract, user_account: buyer).service.id
-    assert_same_elements JSON.parse(services_contracted(buyer)), service_ids
+    assert_same_elements service_ids, JSON.parse(services_contracted(buyer))
   end
 
   test "services_contracted should return a empty array" do
