@@ -75,7 +75,7 @@ mysql-container: &mysql-container
     MYSQL_DATABASE: circleci
 
 postgres-container: &postgres-container
-  image: circleci/postgres:11-alpine
+  image: circleci/postgres:10.5-alpine
   environment:
     POSTGRES_DB: circleci
     POSTGRES_USER: root
