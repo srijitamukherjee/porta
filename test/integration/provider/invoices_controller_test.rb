@@ -14,8 +14,6 @@ class Finance::Provider::InvoicesControllerTest < ActionDispatch::IntegrationTes
     login_provider @provider_account
   end
 
-  disable_transactional_fixtures!
-
   context 'InvoicesController' do
 
     should 'list all invoices' do
