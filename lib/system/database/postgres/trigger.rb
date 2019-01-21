@@ -36,8 +36,8 @@ module System
 
         protected
 
-        def master_id
-          "master_id := #{Account.master.id};"
+        def set_master_id
+          "master_id := #{master_id};"
         rescue ActiveRecord::RecordNotFound
           <<~SQL
             BEGIN
@@ -62,7 +62,7 @@ module System
             DECLARE
               master_id numeric;
             BEGIN
-              #{master_id}
+              #{set_master_id}
 
               IF NEW.tenant_id IS NULL THEN
                 #{trigger}
@@ -89,7 +89,7 @@ module System
               master_id numeric;
               #{trigger_variables}
             BEGIN
-              #{master_id}
+              #{set_master_id}
 
               IF NEW.tenant_id IS NULL THEN
                 #{trigger}

@@ -11,25 +11,28 @@ module System
         end
 
         def body
-          master_id = begin
-            Account.master.id
-          rescue ActiveRecord::RecordNotFound
-            <<~SQL
-              (SELECT id FROM accounts WHERE master)
-            SQL
-          end
-
           <<~SQL
             BEGIN
               DECLARE master_id numeric;
               IF @disable_triggers IS NULL THEN
                 IF NEW.tenant_id IS NULL THEN
-                  SET master_id = #{master_id};
+                  #{set_master_id};
                   #{trigger}
                 END IF;
               END IF;
             END;
           SQL
+        end
+
+        def set_master_id
+          select = begin
+                     master_id
+                   rescue ActiveRecord::RecordNotFound
+                     <<~SQL
+                       (SELECT id FROM accounts WHERE master)
+                     SQL
+                   end
+          "SET master_id = #{select}"
         end
       end
     end

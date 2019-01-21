@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require 'active_support/string_inquirer'
-require 'system/database/trigger'
-require 'system/database/procedure'
 
 module System
   module Database
@@ -142,7 +140,7 @@ module System
           end
 
           def trigger(name, options = {})
-            klass_name = "System::Database::#{ancestors.first.to_s.demodulize}::Trigger"
+            klass_name = "#{System::Database.adapter_module}::Trigger"
             args = [name, yield]
             if variables = options[:with_variables].presence
               klass_name += 'WithVariables'
@@ -152,12 +150,26 @@ module System
           end
 
           def procedure(name, parameters = {}, options = {})
-            klass_name = "System::Database::#{ancestors.first.to_s.demodulize}::Procedure"
+            klass_name = "#{System::Database.adapter_module}::Procedure"
             @procedures << klass_name.constantize.new(name, yield, parameters)
           end
         end
       end
     end
+
+    def adapter_module
+      case adapter.to_sym
+      when :mysql
+        require 'system/database/mysql'
+        MySQL
+      else
+        "System::Database::#{adapter.camelize}".constantize
+      end
+    end
+
+    extend SingleForwardable
+
+    def_delegators :adapter_module, :triggers, :procedures
   end
 end
 

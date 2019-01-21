@@ -32,6 +32,17 @@ module System
       def body
         raise NotImplementedError
       end
+
+      def set_master_id
+        raise NotImplementedError
+      end
+
+      def self.master_id
+        # Prevents master id from being fetched multiple times
+        @master_id ||= Account.master.id
+      end
+
+      delegate :master_id, to: :class
     end
   end
 end

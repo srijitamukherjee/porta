@@ -12,44 +12,24 @@ namespace :multitenant do
   desc "Loads triggers to test database"
   task 'test:triggers' => ['multitenant:test', 'multitenant:triggers']
 
-  triggers = []
-
   namespace :triggers do
-    task :oracle do
-      require 'system/database/definitions/oracle'
-      triggers += System::Database::Oracle.triggers
-    end
-
-    task :mysql do
-      require 'system/database/definitions/mysql'
-      triggers += System::Database::MySQL.triggers
-    end
-
-    task :postgres do
-      require 'system/database/definitions/postgres'
-      triggers += System::Database::Postgres.triggers
-    end
-
-    task :load_triggers do
-      Rake::Task["multitenant:triggers:#{System::Database.adapter}"].invoke
-    end
-
-    task :create => %I[environment load_triggers] do
-      triggers.each do |t|
+    task create: :environment do
+      System::Database.triggers.each do |t|
         ActiveRecord::Base.connection.execute(t.create)
       end
     end
 
-    task :drop => %I[environment load_triggers] do
-      triggers.each do |t|
+    task drop: :environment do
+      System::Database.triggers.each do |t|
         ActiveRecord::Base.connection.execute(t.drop)
       end
     end
   end
 
   desc 'Recreates the DB triggers (delete+create)'
-  task :triggers => %I[environment triggers:load_triggers] do
+  task triggers: :environment do
     puts "Recreating trigger, see log/#{Rails.env}.log"
+    triggers = System::Database.triggers
     triggers.each do |t|
       t.recreate.each do |command|
         ActiveRecord::Base.connection.execute(command)
@@ -130,4 +110,5 @@ namespace :multitenant do
   end
 end
 
+task 'db:triggers' => 'multitenant:triggers' # Alias for 'multitenant:triggers'. TODO: Move the task to the 'db' namespace and refactor so a trigger can be defined not only for setting the tenant_id
 Rake::Task['db:seed'].enhance(['multitenant:triggers'])

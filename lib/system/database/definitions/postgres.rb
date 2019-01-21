@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'system/database/postgres'
-
 System::Database::Postgres.define do
   trigger 'accounts' do
     <<~SQL

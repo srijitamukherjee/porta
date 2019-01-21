@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'system/database/oracle'
-
 System::Database::Oracle.define do
   trigger 'accounts' do
     <<~SQL

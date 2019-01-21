@@ -10,3 +10,5 @@ module System
     end
   end
 end
+
+require 'system/database/definitions/oracle'
