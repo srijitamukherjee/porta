@@ -29,11 +29,18 @@ class NewAccountsQuery
   end
 
   def postgres_query(range, date_format)
-    query_with_offset_retry(range, date_format, &method(:mysql_subquery))
+    sql = "SELECT 1 FROM pg_timezone_names WHERE name = #{connection.quote(time_zone_name)};"
+    # TODO: Cache the time zones known by the database
+    timezone = connection.select_value(sql).to_s == '1' ? time_zone_name : time_zone.formatted_offset
+
+    mysql_subquery range, date_format, timezone: timezone
   end
 
   def oracle_query(range, date_format)
-    query_with_offset_retry(range, date_format, &method(:oracle_subquery))
+    oracle_subquery range, date_format, timezone: time_zone_name
+  # FIXME: Rescuing from ActiveRecord::StatementInvalid is not recommended. See https://api.rubyonrails.org/classes/ActiveRecord/Transactions/ClassMethods.html (Exception handling and rolling back)
+  rescue ActiveRecord::StatementInvalid
+    oracle_subquery range, date_format, timezone: time_zone.formatted_offset
   end
 
   private
@@ -75,13 +82,13 @@ class NewAccountsQuery
     Account.from(query, 'subquery').group('dategrouping').count('subquery.id')
   end
 
-  def query_with_offset_retry(range, date_format)
-    time_zone = Time.zone
-
-    begin
-      yield range, date_format, timezone: time_zone.tzinfo.name
-    rescue ActiveRecord::StatementInvalid
-      yield range, date_format, timezone: time_zone.formatted_offset
-    end
+  def time_zone
+    Time.zone
   end
+
+  def time_zone_name
+    time_zone.tzinfo.name
+  end
+
+  delegate :connection, to: 'ActiveRecord::Base'
 end
