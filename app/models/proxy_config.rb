@@ -95,7 +95,7 @@ class ProxyConfig < ApplicationRecord
     config.update_all("version = 1 + (#{Arel.sql max_version.to_sql})")
 
     # Read the value
-    version = config.connection.select_value(config.select(:version))&.to_i
+    version = config.connection.select_value(config.select(:version)).to_i
     raw_write_attribute :version, version
   end
 
