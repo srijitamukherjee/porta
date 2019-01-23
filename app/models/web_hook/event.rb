@@ -145,7 +145,7 @@ class WebHook
       case
       when @resource.destroyed?
         'deleted'
-      when @resource.created_at.present? && @resource.created_at == @resource.updated_at
+      when @resource.previous_changes.key?('created_at') && @resource.previous_changes['created_at'].first.nil?
         'created'
       when @resource.updated_at.present?
         'updated'
