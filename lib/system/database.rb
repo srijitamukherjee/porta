@@ -35,6 +35,11 @@ module System
       adapter_method.postgresql_connection?
     end
 
+    def execute_procedure(name, *params)
+      command = postgres? ? 'SELECT' : 'CALL'
+      ActiveRecord::Base.connection.execute("#{command} #{name}(#{params.join(',')})")
+    end
+
     # Just adding another connection to the pool so we do not mess up with the primary connection
     # And just forget about it after
     class ConnectionProbe < ActiveRecord::Base
