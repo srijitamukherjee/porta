@@ -1,7 +1,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../test_helper')
 
 class Buyers::ApplicationsControllerTest < ActionController::TestCase
-  disable_transactional_fixtures!
   include WebHookTestHelpers
   include TestHelpers::FakeWeb
 
@@ -46,31 +45,45 @@ class Buyers::ApplicationsControllerTest < ActionController::TestCase
     assert_response :redirect
   end
 
-  # regression test for GH Bug #1933
-  test 'creates app with webhook enabled' do
-    Account.any_instance.stubs(:web_hooks_allowed?).returns(true)
+  class WithTransactionTest < ActionController::TestCase
+    include WebHookTestHelpers
+    include TestHelpers::FakeWeb
+    disable_transactional_fixtures!
 
-    webhook = FactoryBot.create(:webhook, :account => @provider)
-    @service.update_attribute :backend_version, 2
-    buyer = FactoryBot.create(:buyer_account, :provider_account => @provider)
-    buyer.bought_service_contracts.create! :plan => @service.service_plans.first
-
-    all_hooks_are_on(webhook)
-    WebHookWorker.clear
-
-    self.backend_host = 'localhost:3001'
-
-    ThreeScale::Core::Application.stubs(:save).with do |params|
-      fake_backend_get_keys('key', params[:id], params[:service_id], @provider.api_key)
+    setup do
+      @plan = FactoryBot.create(:published_plan)
+      @service = @plan.service
+      @provider = @plan.service.account
+      login_as(@provider.admins.first)
+      host! @provider.self_domain
     end
 
-    post :create, :account_id => buyer.id, :cinstance => {
-      :name => 'whatever', :plan_id => @plan.id
-    }
+    # regression test for GH Bug #1933
+    test 'creates app with webhook enabled' do
+      Account.any_instance.stubs(:web_hooks_allowed?).returns(true)
 
-    assert_response :redirect
+      webhook = FactoryBot.create(:webhook, :account => @provider)
+      @service.update_attribute :backend_version, 2
+      buyer = FactoryBot.create(:buyer_account, :provider_account => @provider)
+      buyer.bought_service_contracts.create! :plan => @service.service_plans.first
 
-    assert_not_empty WebHookWorker.jobs
+      all_hooks_are_on(webhook)
+      WebHookWorker.clear
+
+      self.backend_host = 'localhost:3001'
+
+      ThreeScale::Core::Application.stubs(:save).with do |params|
+        fake_backend_get_keys('key', params[:id], params[:service_id], @provider.api_key)
+      end
+
+      post :create, :account_id => buyer.id, :cinstance => {
+        :name => 'whatever', :plan_id => @plan.id
+      }
+
+      assert_response :redirect
+
+      assert_not_empty WebHookWorker.jobs
+    end
   end
 
 

@@ -1,8 +1,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../test_helper')
 
 class Admin::Api::EndUsersTest < ActionDispatch::IntegrationTest
-  disable_transactional_fixtures!
-
   def setup
     @provider = FactoryBot.create :provider_account, :domain => 'provider.example.com'
     @service = @provider.first_service!
