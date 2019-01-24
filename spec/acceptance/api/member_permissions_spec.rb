@@ -54,7 +54,7 @@ resource "MemberPermission" do
 
   json(:resource) do
     let(:root) { 'permissions' }
-    let(:representer) { MemberPermissionsRepresenter.format(:json).prepare(sorted_collection serializable) }
+    let(:representer) { MemberPermissionsRepresenter.format(:json).prepare(serializable) }
 
     it { should have_properties('user_id', 'role') }
 
@@ -85,7 +85,7 @@ resource "MemberPermission" do
 
 
   xml(:resource) do
-    let(:representer) { MemberPermissionsRepresenter.format(:xml).prepare(sorted_collection serializable) }
+    let(:representer) { MemberPermissionsRepresenter.format(:xml).prepare(serializable) }
 
     it('has root') { should have_tag('permissions') }
 

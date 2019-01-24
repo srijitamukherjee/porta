@@ -37,7 +37,6 @@ module ThreeScale::JSONRepresenter
       self.instance_eval do
         include Representable::JSON::Collection
         include ThreeScale::CollectionRepresenter::XMLCollection
-        include ThreeScale::CollectionRepresenter::OrderedCollection
       end
     end
   end

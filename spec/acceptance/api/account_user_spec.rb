@@ -20,7 +20,7 @@ resource "User" do
     delete '/admin/api/accounts/:account_id/users/:id', action: :destroy
 
     get '/admin/api/accounts/:account_id/users.:format', action: :index do
-      let(:serializable) { [ buyer.users.order(:id).first, resource ] }
+      let(:serializable) { [ buyer.users.first, resource ] }
 
       context do
         parameter :state, 'Filter by state'

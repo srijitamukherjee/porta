@@ -64,7 +64,7 @@ shared_context "collection", collection: true do
   end
 
   let(:serializable) { collection }
-  let(:representer) { collection_representer.constantize.format(format).prepare(sorted_collection serializable) }
+  let(:representer) { collection_representer.constantize.format(format).prepare(serializable) }
 end
 
 shared_context "json", json: true do
