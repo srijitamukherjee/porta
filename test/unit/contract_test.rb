@@ -2,8 +2,6 @@ require 'test_helper'
 
 class ContractTest < ActiveSupport::TestCase
 
-  disable_transactional_fixtures!
-
   def test_plan_changed_is_notified_after_commit
     plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
     contract = FactoryBot.create(:account_contract, :plan => plan)

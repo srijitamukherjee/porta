@@ -2,7 +2,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../test_helper')
 
 class Backend::RandomDataGeneratorTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
 
   test 'generate' do
     provider = FactoryBot.create :provider_account

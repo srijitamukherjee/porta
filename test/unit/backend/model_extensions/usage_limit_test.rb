@@ -1,7 +1,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../../test_helper')
 
 class Backend::ModelExtensions::UsageLimitTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
 
   def expect_save_for(usage_limit, without: [], with: {}, &blk)
     entries = {

@@ -1,8 +1,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../test_helper')
 
 class CinstanceObserverTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
-
   fixtures :countries
 
   def setup

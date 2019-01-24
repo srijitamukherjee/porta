@@ -1,7 +1,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/../test_helper')
 
 class UserTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
 
   subject { @user || FactoryBot.create(:user) }
 
