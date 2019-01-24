@@ -44,6 +44,8 @@ default: &DEFAULT
   encoding: utf8
   collation: utf8_bin
   host: <%= ENV.fetch('DB_PORT_3306_TCP_ADDR') { ENV['DB_PORT'] ? 'db' : ENV['DB_HOST'] } || '127.0.0.1' %>
+  pool: <%= ENV.fetch('RAILS_MAX_THREADS', 25) %>
+
 
 production:
   <<: *DEFAULT
