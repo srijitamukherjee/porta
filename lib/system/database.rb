@@ -141,7 +141,7 @@ module System
             @triggers.clear
             @procedures.clear
 
-            class_eval &block
+            class_eval(&block)
           end
 
           def trigger(name, options = {})
@@ -154,7 +154,7 @@ module System
             @triggers << klass_name.constantize.new(*args)
           end
 
-          def procedure(name, parameters = {}, options = {})
+          def procedure(name, parameters = {})
             klass_name = "#{System::Database.adapter_module}::Procedure"
             @procedures << klass_name.constantize.new(name, yield, parameters)
           end
