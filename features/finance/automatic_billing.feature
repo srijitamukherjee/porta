@@ -1,5 +1,5 @@
 @stats
-Feature: Automatic billing with plan changes on PREPAID
+Feature: Invoices creation by billing job or by API/UI
   As a provider I want to differentiate costs added by the automatic
   billing job and my manually created invoices
 
@@ -104,3 +104,4 @@ Feature: Automatic billing with plan changes on PREPAID
       | Total cost                                      |          | 3,100.00  |
     Then the buyer should have following line items for "February, 2017" in the 1st invoice:
       | Fixed fee ('Paid')                              |          | 3,100.00  |
+
