@@ -38,6 +38,183 @@ namespace :multitenant do
     puts "Recreated #{triggers.size} triggers"
   end
 
+  desc 'Fix empty or corrupted tenant_id in accounts'
+  task :fix_corrupted_tenant_id_accounts, %i[batch_size sleep_time] => :environment do |_task, args|
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    ids = (Rails.application.simple_try_config_for(:corrupted_accounts) || [])
+
+    id_chunks = []; ids.each_slice(batch_size) { |slice| id_chunks << slice }
+
+    id_chunks.each do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each do |id|
+        next unless (account = Account.find_by(id: id))
+        new_tenant_id = account.buyer? ? account.provider_account_id : account.id
+        account.update_column(:tenant_id, new_tenant_id)
+      end
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in users'
+  task :fix_corrupted_tenant_id_users, %i[batch_size sleep_time] => :environment do |_task, args|
+    corruption_date = Date.parse('january 24 2019')
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    condition = proc { |object| (object.tenant_id == nil) | ((object.created_at >= Time.parse("#{corruption_date} 08:00 UTC").utc) & (object.created_at <= Time.parse("#{corruption_date} 16:30 UTC").utc)) }
+
+    puts '------ Updating "users" ------'
+    User.joining { account }.where.has(&condition).find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each { |user| user.update_column(:tenant_id, user.account.tenant_id) if user.account_id != Account.master.id }
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in settings'
+  task :fix_corrupted_tenant_id_settings, %i[batch_size sleep_time] => :environment do |_task, args|
+    corruption_date = Date.parse('january 24 2019')
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    condition = proc { |object| (object.tenant_id == nil) | ((object.created_at >= Time.parse("#{corruption_date} 08:00 UTC").utc) & (object.created_at <= Time.parse("#{corruption_date} 16:30 UTC").utc)) }
+
+    puts '------ Updating "settings" ------'
+    Settings.joining { account }.where.has(&condition).find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each { |settings| settings.update_column(:tenant_id, settings.account.tenant_id) if settings.account_id != Account.master.id }
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in profiles'
+  task :fix_corrupted_tenant_id_profiles, %i[batch_size sleep_time] => :environment do |_task, args|
+    corruption_date = Date.parse('january 24 2019')
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    condition = proc { |object| (object.tenant_id == nil) | ((object.created_at >= Time.parse("#{corruption_date} 08:00 UTC").utc) & (object.created_at <= Time.parse("#{corruption_date} 16:30 UTC").utc)) }
+
+    puts '------ Updating "profiles" ------'
+    Profile.joining { account }.where.has(&condition).find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each { |profile| profile.update_column(:tenant_id, profile.account.tenant_id) if profile.account_id != Account.master.id }
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in access_tokens'
+  task :fix_corrupted_tenant_id_access_tokens, %i[batch_size sleep_time] => :environment do |_task, args|
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    puts '------ Updating "access_tokens" ------'
+    AccessToken.joining { owner }.where.has { tenant_id == nil }.find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each do |access_token|
+        tenant_id = access_token.owner.tenant_id
+        access_token.update_column(:tenant_id, tenant_id) if tenant_id != Account.master.id
+      end
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in notification_preferences'
+  task :fix_corrupted_tenant_id_notification_preferences, %i[batch_size sleep_time] => :environment do |_task, args|
+    corruption_date = Date.parse('january 24 2019')
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    condition = proc { |object| (object.tenant_id == nil) | ((object.created_at >= Time.parse("#{corruption_date} 08:00 UTC").utc) & (object.created_at <= Time.parse("#{corruption_date} 16:30 UTC").utc)) }
+
+    puts '------Updating "notification_preferences" ------'
+    NotificationPreferences.joining { user }.where.has(&condition).find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each do |notification_preference|
+        tenant_id = notification_preference.user.tenant_id
+        notification_preference.update_column(:tenant_id, tenant_id) if tenant_id != Account.master.id
+      end
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in payment_details'
+  task :fix_corrupted_tenant_id_payment_details, %i[batch_size sleep_time] => :environment do |_task, args|
+    corruption_date = Date.parse('january 24 2019')
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    condition = proc { |object| (object.tenant_id == nil) | ((object.created_at >= Time.parse("#{corruption_date} 08:00 UTC").utc) & (object.created_at <= Time.parse("#{corruption_date} 16:30 UTC").utc)) }
+
+    puts '------Updating "payment_details" ------'
+    PaymentDetail.joining { account }.where.has(&condition).find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each { |payment_detail| payment_detail.update_column(:tenant_id, payment_detail.account.tenant_id) if payment_detail.account_id != Account.master.id }
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in sso_authorizations'
+  task :fix_corrupted_tenant_id_sso_authorizations, %i[batch_size sleep_time] => :environment do |_task, args|
+    corruption_date = Date.parse('january 24 2019')
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    condition = proc { |object| (object.tenant_id == nil) | ((object.created_at >= Time.parse("#{corruption_date} 08:00 UTC").utc) & (object.created_at <= Time.parse("#{corruption_date} 16:30 UTC").utc)) }
+
+    puts '------Updating "sso_authorizations" ------'
+    SSOAuthorization.joining { user }.where.has(&condition).find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each do |sso_authorization|
+        tenant_id = sso_authorization.user.tenant_id
+        sso_authorization.update_column(:tenant_id, tenant_id) if tenant_id != Account.master.id
+      end
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in policies'
+  task :fix_corrupted_tenant_id_policies, %i[batch_size sleep_time] => :environment do |_task, args|
+    corruption_date = Date.parse('january 24 2019')
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    condition = proc { |object| (object.tenant_id == nil) | ((object.created_at >= Time.parse("#{corruption_date} 08:00 UTC").utc) & (object.created_at <= Time.parse("#{corruption_date} 16:30 UTC").utc)) }
+
+    puts '------Updating "policies" ------'
+    Policy.joining { account }.where.has(&condition).find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each { |policy| policy.update_column(:tenant_id, policy.account.tenant_id) if policy.account_id != Account.master.id }
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
+  desc 'Fix empty or corrupted tenant_id in alerts'
+  task :fix_corrupted_tenant_id_alerts, %i[batch_size sleep_time] => :environment do |_task, args|
+    batch_size = (args[:batch_size] || 100).to_i
+    sleep_time = (args[:sleep_time] || 1).to_i
+
+    puts '------ Updating "alerts" ------'
+    Alert.joining { account }.where.has { tenant_id == nil }.find_in_batches(batch_size: batch_size) do |group|
+      puts "Executing update for a batch of size: #{group.size}"
+      group.each { |alert| alert.update_column(:tenant_id, alert.account.tenant_id) if alert.account_id != Account.master.id }
+      puts "Sleeping #{sleep_time} seconds"
+      sleep(sleep_time)
+    end
+  end
+
   desc 'Sets the tenant id on all relevant tables'
   task :set_tenant_id => :environment do
 
