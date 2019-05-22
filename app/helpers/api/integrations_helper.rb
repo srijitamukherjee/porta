@@ -61,7 +61,7 @@ module Api::IntegrationsHelper
   end
 
   def can_toggle_apicast_version?
-    current_account.provider_can_use?(:apicast_v2) && current_account.provider_can_use?(:apicast_v1)
+    current_account.provider_can_use?(:apicast_v1)
   end
 
   def apicast_custom_urls?

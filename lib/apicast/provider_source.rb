@@ -50,11 +50,6 @@ module Apicast
 
     protected
 
-    # this is probably not valid
-    def provider_methods
-      provider.provider_can_use?(:apicast_v2) ? [] : [:provider_key]
-    end
-
     def mash
       Hashie::Mash.new(attributes_for_proxy)
     end

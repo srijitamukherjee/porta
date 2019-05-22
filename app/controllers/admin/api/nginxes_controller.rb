@@ -25,7 +25,7 @@ class Admin::Api::NginxesController < Admin::Api::BaseController
   protected
 
   def disable_on_premises
-    raise ActiveRecord::RecordNotFound if current_account.provider_can_use?(:apicast_v2) && ThreeScale.config.apicast_custom_url
+    raise ActiveRecord::RecordNotFound if ThreeScale.config.apicast_custom_url
   end
 
   def apicast_source

@@ -139,7 +139,6 @@ class ProxyTest < ActiveSupport::TestCase
 
   def test_apicast_configuration_driven
     @proxy.provider.stubs(:provider_can_use?).with(:apicast_v1).returns(true)
-    @proxy.provider.stubs(:provider_can_use?).with(:apicast_v2).returns(true)
 
     @proxy.apicast_configuration_driven = true
     assert @proxy.apicast_configuration_driven
@@ -154,7 +153,6 @@ class ProxyTest < ActiveSupport::TestCase
 
   def test_deploy_service_mesh_integration
     @proxy.provider.stubs(:provider_can_use?).with(:apicast_v1).returns(true)
-    @proxy.provider.stubs(:provider_can_use?).with(:apicast_v2).returns(true)
     @proxy.provider.stubs(:provider_can_use?).with(:service_mesh_integration).returns(true)
     @proxy.stubs(:deployment_option).returns('service_mesh_istio')
     @proxy.expects(:deploy_v2).returns(true)
@@ -221,7 +219,6 @@ class ProxyTest < ActiveSupport::TestCase
 
   test 'proxy api backend with base path' do
     @account.stubs(:provider_can_use?).with(:apicast_v1).returns(true)
-    @account.stubs(:provider_can_use?).with(:apicast_v2).returns(true)
 
     @account.expects(:provider_can_use?).with(:proxy_private_base_path).returns(false)
     @proxy.api_backend = 'https://example.org:3/path'

@@ -14,7 +14,6 @@ base: &default
   forum: true
   policies: false
   policy_registry: false
-  apicast_v2: true
   proxy_private_base_path: true
   api_as_product: false
 

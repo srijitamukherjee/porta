@@ -237,12 +237,6 @@ module Logic
         end
       end
 
-      class ApicastV2 < Base
-        def missing_config
-          master?
-        end
-      end
-
       class ApicastV1 < Base
         def missing_config
           Rails.env.test? || provider_created_at < Date.new(2017, 6, 30)

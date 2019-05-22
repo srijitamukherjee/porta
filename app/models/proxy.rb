@@ -429,7 +429,7 @@ class Proxy < ApplicationRecord
   end
 
   def apicast_configuration_driven
-    if provider && provider.provider_can_use?(:apicast_v2) && !provider.provider_can_use?(:apicast_v1)
+    if provider && !provider.provider_can_use?(:apicast_v1)
       true
     else
       super
