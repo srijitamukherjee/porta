@@ -173,7 +173,6 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
       end
     end
   end
-<<<<<<< HEAD
 
   class DeleteMemberPermissionTest < DeleteObjectHierarchyWorkerTest
 
@@ -190,6 +189,4 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
       DeleteObjectHierarchyWorker.perform_now(provider)
     end
   end
-=======
->>>>>>> THREESCALE-2571
 end
