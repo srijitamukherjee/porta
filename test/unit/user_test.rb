@@ -1,4 +1,4 @@
-require File.expand_path(File.dirname(__FILE__) + '/../test_helper')
+require 'test_helper'
 
 class UserTest < ActiveSupport::TestCase
   disable_transactional_fixtures!
@@ -18,6 +18,17 @@ class UserTest < ActiveSupport::TestCase
 
   setup do
     ActionMailer::Base.deliveries = []
+  end
+
+  test 'the user deleted event is created when the user is destroyed' do
+    account = FactoryBot.create(:simple_provider)
+    user = FactoryBot.create(:user, account: account)
+
+    assert_difference(EventStore::Event.where(event_type: Users::UserDeletedEvent).method(:count)) do
+      user.reload.destroy!
+    end
+
+    assert_equal user.id, EventStore::Event.where(event_type: Users::UserDeletedEvent).last!.data[:user_id]
   end
 
   def test_user_suspended_no_sessions
@@ -91,21 +102,26 @@ class UserTest < ActiveSupport::TestCase
     admin    = FactoryBot.build_stubbed(:admin, account: provider)
     member   = FactoryBot.build_stubbed(:member, account: provider)
 
-    assert_equal 1, admin.accessible_services.count
-    assert_equal 1, member.accessible_services.count
+    assert_equal [service.id], admin.accessible_services.map(&:id)
+    assert_equal [service.id], member.accessible_services.map(&:id)
 
     member.stubs(:has_access_to_all_services?).returns(true)
 
-    assert_equal 1, member.accessible_services.count
+    assert_equal [service.id], member.accessible_services.map(&:id)
 
     member.stubs(:has_access_to_all_services?).returns(false)
     member.stubs(:member_permission_service_ids).returns([service.id])
 
-    assert_equal 1, member.accessible_services.count
+    assert_equal [service.id], member.accessible_services.map(&:id)
 
     member.stubs(:member_permission_service_ids).returns([])
 
-    assert_equal 0, member.accessible_services.count
+    assert_equal [], member.accessible_services.map(&:id)
+
+
+    member.stubs(:has_access_to_all_services?).returns(true)
+    member.stubs(:member_permission_service_ids).returns(nil)
+    assert_equal [service.id], member.accessible_services.map(&:id)
   end
 
   test '#multiple_accessible_services?' do
