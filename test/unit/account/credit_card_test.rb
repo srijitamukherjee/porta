@@ -2,6 +2,24 @@ require 'test_helper'
 
 class Account::CreditCardTest < ActiveSupport::TestCase
 
+  test 'unstore credit card' do
+    provider_account = FactoryBot.create(:simple_provider)
+    buyer_account = FactoryBot.create(:simple_provider, provider_account: provider_account, credit_card_auth_code: 'example')
+
+    buyer_account.stubs(:payment_gateway_configured?).returns(true)
+    provider_account.payment_gateway.expects(:threescale_unstore).with('example').once
+    buyer_account.destroy
+  end
+
+  test 'it does not unstore credit card' do
+     provider_account = FactoryBot.create(:simple_provider)
+    buyer_account = FactoryBot.create(:simple_provider, provider_account: provider_account, credit_card_auth_code: 'example')
+
+    buyer_account.stubs(:payment_gateway_configured?).returns(false)
+    provider_account.payment_gateway.expects(:threescale_unstore).with('example').never
+    buyer_account.destroy
+  end
+
   test 'credit_card_stored? return false by default' do
     refute Account.new.credit_card_stored?
   end
