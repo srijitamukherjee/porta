@@ -39,6 +39,10 @@ development:
     hmr: false
     https: false
 
+preview:
+  <<: *default
+  compile: false
+
 test:
   <<: *default
   compile: false
