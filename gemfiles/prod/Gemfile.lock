@@ -505,7 +505,7 @@ GEM
     powerpack (0.1.1)
     prawn-format (0.2.1)
       prawn-core
-    prawn-layout (0.2.1)
+    prawn-layout (0.8.4)
     prometheus-client-mmap (0.9.5)
     protected_attributes (1.1.4)
       activemodel (>= 4.0.1, < 5.0)
@@ -905,7 +905,7 @@ DEPENDENCIES
   pisoni (~> 1.26)
   prawn-core!
   prawn-format (= 0.2.1)
-  prawn-layout (= 0.2.1)
+  prawn-layout (= 0.8.4)
   prometheus-client-mmap
   protected_attributes (~> 1.1.4)
   pry-doc (>= 0.8)
