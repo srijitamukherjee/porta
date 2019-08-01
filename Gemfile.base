@@ -175,7 +175,13 @@ gem 'ruby-openid'
 gem 'draper', '~> 2.0'
 # TODO: gem 'draper', '~> 3.0'
 
+# The ruby implementation of the GraphQL language.
+gem 'graphql'
+
 group :development do
+  # A development utility to test GraphQL queries.
+  gem 'graphiql-rails'
+
   gem 'colorize'
   gem 'bullet', '~> 4.2'
 

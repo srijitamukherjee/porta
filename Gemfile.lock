@@ -355,6 +355,10 @@ GEM
       retriable (>= 1.4)
       signet (>= 0.5.0)
       uuidtools (>= 2.1.0)
+    graphiql-rails (1.7.0)
+      railties
+      sprockets-rails
+    graphql (1.9.9)
     gruff (0.6.0)
       rmagick (>= 2.13.4)
     has_scope (0.7.1)
@@ -862,6 +866,8 @@ DEPENDENCIES
   formtastic (~> 1.2.4)
   github-markdown
   google-api-client
+  graphiql-rails
+  graphql
   gruff (~> 0.3)
   hashie
   hiredis (~> 0.6.0)

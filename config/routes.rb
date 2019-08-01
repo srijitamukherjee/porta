@@ -13,6 +13,11 @@ end
 
 System::Application.routes.draw do
 
+  if Rails.env.development?
+    mount GraphiQL::Rails::Engine, at: "/graphiql", graphql_path: "/graphql"
+  end
+
+  post "/graphql", to: "graphql#execute"
   constraints MasterDomainConstraint do
     prometheus = Rack::Builder.app do
       use Rack::Auth::Basic, 'Prometheus' do |username, password|
