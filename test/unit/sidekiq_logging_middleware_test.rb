@@ -1,4 +1,5 @@
 require 'test_helper'
+require 'three_scale/sidekiq_logging_middleware'
 
 class SidekiqLoggingMiddlewareTest < ActiveSupport::TestCase
   test 'filter sensitive arguments' do
