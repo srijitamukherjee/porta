@@ -29,6 +29,8 @@ class BackendApi < ApplicationRecord
 
   has_system_name(uniqueness_scope: [:account_id])
 
+  scope :orphans, -> { joining { services.outer }.where{ BabySqueel[:backend_api_configs].backend_api_id == nil } }
+
   def self.default_api_backend
     "https://#{ECHO_API_HOST}:443"
   end

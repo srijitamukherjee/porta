@@ -23,4 +23,13 @@ class BackendApiTest < ActiveSupport::TestCase
     @backend_api.private_endpoint = 'https://example.org:3/path'
     assert @backend_api.valid?
   end
+
+  test '.orphans should return backend apis that do not belongs to any service' do
+    FactoryBot.create(:service)
+    service_to_delete = FactoryBot.create(:service)
+    orphan_backend_api = service_to_delete.backend_api_configs.first.backend_api
+    service_to_delete.destroy!
+
+    assert_equal [orphan_backend_api], BackendApi.orphans
+  end
 end

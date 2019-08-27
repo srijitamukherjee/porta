@@ -316,7 +316,7 @@ class ServiceTest < ActiveSupport::TestCase
     service.account.settings.service_plans_ui_visible = true
 
     service.save!
-    
+
     service_plan = service.service_plans.first!
     assert_equal 'hidden', service_plan.state
   end
@@ -346,9 +346,13 @@ class ServiceTest < ActiveSupport::TestCase
     assert_equal 'published', service_plan.state
   end
 
-  class DestroyingServiceTest < ActiveSupport::TestCase
+  class DestroyServiceTest < ActiveSupport::TestCase
 
     disable_transactional_fixtures!
+
+    def setup
+      Account.any_instance.stubs(:provider_can_use?).returns(true)
+    end
 
     test "destroying service destroys it's plans" do
       service          = FactoryBot.create(:service)
@@ -388,21 +392,6 @@ class ServiceTest < ActiveSupport::TestCase
       event = RailsEventStoreActiveRecord::Event.where(event_type: Services::ServiceDeletedEvent).last!
       assert_equal service_id, event.data['service_id']
     end
-  end
-
-  class CreateServiceTest < ActiveSupport::TestCase
-    disable_transactional_fixtures!
-
-    test 'creating service creates a related event' do
-      User.stubs(current: FactoryBot.create(:simple_user))
-      assert_difference(RailsEventStoreActiveRecord::Event.where(event_type: Services::ServiceCreatedEvent).method(:count)) do
-        FactoryBot.create(:simple_service)
-      end
-    end
-  end
-
-  class DestroyServiceTest < ActiveSupport::TestCase
-    disable_transactional_fixtures!
 
     test 'archive as deleted' do
       account = FactoryBot.create(:simple_provider)
@@ -415,6 +404,49 @@ class ServiceTest < ActiveSupport::TestCase
       assert_equal 'Service', deleted_object_entry.object_type
       assert_equal account.id, deleted_object_entry.owner_id
       assert_equal 'Account', deleted_object_entry.owner_type
+    end
+
+    test 'marking as deleted should not delete the associates Backend APIs if in rolling update and service acts as product' do
+      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(true).at_least_once
+      default_service = FactoryBot.create(:simple_service)
+      account = default_service.account
+      service_to_delete = FactoryBot.create(:simple_service, account: account, act_as_product: true)
+
+      assert_change of: lambda { BackendApi.count }, by: 0 do
+        service_to_delete.mark_as_deleted
+      end
+    end
+
+    test 'marking as deleted should delete the associates Backend APIs if not in rolling update and service acts as product' do
+      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(false).at_least_once
+      default_service = FactoryBot.create(:simple_service)
+      account = default_service.account
+      service_to_delete = FactoryBot.create(:simple_service, account: account, act_as_product: true)
+
+      assert_change of: lambda { BackendApi.count }, by: -1 do
+        service_to_delete.mark_as_deleted
+      end
+    end
+
+    test 'marking as deleted should delete the associates Backend APIs if the service does not act as product' do
+      default_service = FactoryBot.create(:simple_service)
+      account = default_service.account
+      service_to_delete = FactoryBot.create(:simple_service, account: account, act_as_product: false)
+
+      assert_change of: lambda { BackendApi.count }, by: -1 do
+        service_to_delete.mark_as_deleted
+      end
+    end
+  end
+
+  class CreateServiceTest < ActiveSupport::TestCase
+    disable_transactional_fixtures!
+
+    test 'creating service creates a related event' do
+      User.stubs(current: FactoryBot.create(:simple_user))
+      assert_difference(RailsEventStoreActiveRecord::Event.where(event_type: Services::ServiceCreatedEvent).method(:count)) do
+        FactoryBot.create(:simple_service)
+      end
     end
   end
 
