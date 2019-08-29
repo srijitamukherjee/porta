@@ -7,14 +7,14 @@ class Api::ProxyRulesControllerTest < ActionDispatch::IntegrationTest
     Logic::RollingUpdates.stubs(enabled?: true)
     Account.any_instance.stubs(:provider_can_use?).returns(true)
     @provider = FactoryBot.create(:provider_account)
-    @service  = FactoryBot.create(:service, account: @provider)
     login_provider @provider
   end
 
-  class WithFeatureEnabled < Api::ProxyRulesControllerTest
+  class WhenApiAsProductIsEnabled < Api::ProxyRulesControllerTest
     def setup
       super
-      Account.any_instance.stubs(:provider_can_use?).with(:independent_mapping_rules).returns(true).at_least_once
+      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(true).at_least_once
+      @service = FactoryBot.create(:service, account: @provider)
     end
 
     test 'index page list all proxy rules' do
@@ -61,10 +61,11 @@ class Api::ProxyRulesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  class WithFeatureDisabled < Api::ProxyRulesControllerTest
+  class WhenApiAsProductIsDisabled < Api::ProxyRulesControllerTest
     def setup
       super
-      Account.any_instance.stubs(:provider_can_use?).with(:independent_mapping_rules).returns(false).at_least_once
+      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(false).at_least_once
+      @service = FactoryBot.create(:service, account: @provider)
     end
 
     test 'cannot access index page' do

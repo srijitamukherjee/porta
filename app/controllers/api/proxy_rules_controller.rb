@@ -44,7 +44,7 @@ class Api::ProxyRulesController < Api::BaseController
   private
 
   def authorize!
-    provider_can_use!(:independent_mapping_rules)
+    provider_can_use!(:api_as_product)
   end
 
   def proxy
