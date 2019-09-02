@@ -1,4 +1,4 @@
-require File.expand_path(File.dirname(__FILE__) + '/../../test_helper')
+require 'test_helper'
 
 class Abilities::FinanceTest < ActiveSupport::TestCase
   def setup
@@ -6,9 +6,6 @@ class Abilities::FinanceTest < ActiveSupport::TestCase
   end
 
   test "provider can see finance section if hidden or visible" do
-    admin = FactoryBot.create(:user, :account => @provider, :role => :admin)
-    ability = Ability.new(admin)
-
     @provider.settings.allow_finance!
     ability.reload!
     assert_can ability, :see, :finance
@@ -21,10 +18,14 @@ class Abilities::FinanceTest < ActiveSupport::TestCase
   end
 
   test "if denied, provider can't see the finance section but can administrate it" do
-    admin = FactoryBot.create(:user, :account => @provider, :role => :admin)
-    ability = Ability.new(admin)
     assert_cannot ability, :see, :finance
     assert_can ability, :admin, :finance
+  end
+
+  private
+
+  def ability
+    @ability ||= Ability.new(@provider.admin_users.first!)
   end
 
 end
