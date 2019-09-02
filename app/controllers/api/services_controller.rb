@@ -35,8 +35,7 @@ class Api::ServicesController < Api::BaseController
   end
 
   def create
-    @service = collection.new # this is done in 2 steps so that the account_id is in place as preffix_key relies on it
-    @service.attributes = service_params
+    @service = APIS::APIBuilderService.new(current_account).build(params)
     @service.backend_api_configs = build_backend_api_configs
 
     if can_create? && @service.save
@@ -51,13 +50,13 @@ class Api::ServicesController < Api::BaseController
   end
 
   def update
-    if @service.update_attributes(params[:service])
-      flash[:notice] =  'Service information updated.'
+    if APIS::APIUpdaterService.new(@service).update(params)
+      flash[:notice] = 'Service information updated.'
       onboarding.bubble_update('api') if service_name_changed?
       onboarding.bubble_update('deployment') if integration_method_changed? && !integration_method_self_managed?
-      redirect_back_or_to :action => :settings
+      redirect_back_or_to action: :settings
     else
-      render :action => :edit # edit page is only page with free form fields. other forms are less probable to have errors
+      render action: :edit # edit page is only page with free form fields. other forms are less probable to have errors
     end
   end
 
@@ -73,11 +72,6 @@ class Api::ServicesController < Api::BaseController
     return [] if !provider_can_use?(:api_as_product) || params[:service][:backend_api].blank?
     backend_api = current_account.backend_apis.find(params[:service][:backend_api])
     [BackendApiConfig.new(backend_api: backend_api)]
-  end
-
-  def service_params
-    allowed_params = %i[system_name name description]
-    params.require(:service).permit(allowed_params)
   end
 
   protected

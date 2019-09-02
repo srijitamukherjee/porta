@@ -12,6 +12,14 @@ class Api::ServicesControllerTest < ActionDispatch::IntegrationTest
 
   attr_reader :service
 
+  class OldEmptyAttributesTest < Api::ServicesControllerTest
+    test 'update with empty attributes' do
+      skip 'it should fail right now for the "require" in the attributes'
+      put admin_service_path(service), {}
+      assert_response :redirect
+    end
+  end
+
   class SettingsTest < Api::ServicesControllerTest
     test 'settings renders the right template and contains the right sections' do
       get settings_admin_service_path(service)
