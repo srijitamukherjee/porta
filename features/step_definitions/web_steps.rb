@@ -102,30 +102,36 @@ end
 
 Then /^(?:|I )should see JSON:$/ do |expected_json|
   require 'json'
+  Capybara.ignore_hidden_elements = true
   expected = JSON.pretty_generate(JSON.parse(expected_json))
   actual   = JSON.pretty_generate(JSON.parse(response.body))
   expected.should == actual
+  Capybara.ignore_hidden_elements = false
 end
 
 Then /^(?:|I )should see "([^"]*)"(?: within "([^"]*)")?$/ do |text, selector|
   regex = Regexp.new(Regexp.escape(text), Regexp::IGNORECASE)
   with_scope(selector) do
+    Capybara.ignore_hidden_elements = true
     if page.respond_to? :should
       page.should have_content(regex)
     else
       assert page.has_content?(regex)
     end
+    Capybara.ignore_hidden_elements = false
   end
 end
 
 Then /^(?:|I )should see \/([^\/]*)\/(?: within "([^"]*)")?$/ do |regexp, selector|
   regexp = Regexp.new(regexp, Regexp::IGNORECASE)
   with_scope(selector) do
+    Capybara.ignore_hidden_elements = true
     if page.respond_to? :should
       page.should have_xpath('//*', :text => regexp)
     else
       assert page.has_xpath?('//*', :text => regexp)
     end
+    Capybara.ignore_hidden_elements = false
   end
 end
 
@@ -139,11 +145,13 @@ end
 Then /^(?:|I )should not see \/([^\/]*)\/(?: within "([^"]*)")?$/ do |regexp, selector|
   regexp = Regexp.new(regexp, Regexp::IGNORECASE)
   with_scope(selector) do
+    Capybara.ignore_hidden_elements = true
     if page.respond_to? :should
       page.should have_no_xpath('//*', :text => regexp)
     else
       assert page.has_no_xpath?('//*', :text => regexp)
     end
+    Capybara.ignore_hidden_elements = false
   end
 end
 
