@@ -85,7 +85,8 @@ Feature: Create application
        And I fill in "Name" with "UltimateWidget"
        And I fill in "Description" with "Awesome ultimate super widget"
        And I select "second_app_plan" from "Application plan"
-      Then I should see "Create a service plan"
+      # FIXME: this is a false positive, the element is invisible
+      # Then I should see "Create a service plan"
 
   @javascript
   Scenario: Create an application with extra field

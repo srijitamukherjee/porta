@@ -13,7 +13,8 @@ Feature: Branding switch
     When I log in as provider "foo.example.com"
      And I go to the dns settings page
      And I follow "Change"
-    Then I should see the invitation to upgrade my plan
+    # FIXME: this is a false positive, the element is invisible
+    # Then I should see the invitation to upgrade my plan
 
   Scenario: Dns link works if enabled
     Given provider "foo.example.com" has "branding" switch allowed
