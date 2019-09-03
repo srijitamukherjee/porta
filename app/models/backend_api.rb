@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 class BackendApi < ApplicationRecord
-
   include SystemName
+
+  DELETED_STATE = :deleted
   ECHO_API_HOST = 'echo-api.3scale.net'
 
   has_many :proxy_rules, as: :owner, dependent: :destroy, inverse_of: :owner
@@ -16,6 +17,7 @@ class BackendApi < ApplicationRecord
   delegate :default_api_backend, to: :class
 
   validates :name,        length: { maximum: 511 }, presence: true
+  validates :state,       length: { maximum: 255 }
   validates :system_name, length: { maximum: 255 }, presence: true
 
   validates :private_endpoint, length: { maximum: 255 },
@@ -28,6 +30,19 @@ class BackendApi < ApplicationRecord
   before_validation :set_private_endpoint, :set_port_private_endpoint
 
   has_system_name(uniqueness_scope: [:account_id])
+
+  scope :accessible, -> { where.not(state: DELETED_STATE) }
+
+  state_machine initial: :published do
+    state :published
+    state DELETED_STATE
+
+    event :mark_as_deleted do
+      transition [:published] => DELETED_STATE
+    end
+
+    after_transition to: [DELETED_STATE], do: :schedule_deletion
+  end
 
   def self.default_api_backend
     "https://#{ECHO_API_HOST}:443"
@@ -48,6 +63,10 @@ class BackendApi < ApplicationRecord
   end
 
   private
+
+  def schedule_deletion
+    DeleteObjectHierarchyWorker.perform_later(self)
+  end
 
   def set_private_endpoint
     self.private_endpoint ||= default_api_backend

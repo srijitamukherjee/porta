@@ -23,4 +23,10 @@ class BackendApiTest < ActiveSupport::TestCase
     @backend_api.private_endpoint = 'https://example.org:3/path'
     assert @backend_api.valid?
   end
+
+  test '#accessible does not return deleted backend apis' do
+    deleted = FactoryBot.create(:backend_api, state: :deleted)
+
+    refute BackendApi.accessible.include?(deleted)
+  end
 end
