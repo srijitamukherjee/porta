@@ -22,8 +22,10 @@ class Contract < ApplicationRecord
   after_destroy :destroy_customized_plan
   after_commit :notify_plan_changed
 
-  belongs_to :plan, counter_cache: true
-  validate   :correct_plan_subclass?
+  belongs_to :plan
+  counter_culture :plan, column_name: -> { |object| object.counter_culture_enabled? ? :contracts_count : nil }
+
+  validate :correct_plan_subclass?
   # this breaks nested saving of records, when validating there is no user_account yet, its new record
   # validates_presence_of :user_account
 
@@ -107,6 +109,10 @@ class Contract < ApplicationRecord
   end
 
   delegate :paid?, :to => :plan
+
+  def counter_culture_enabled?
+    !provider_account.scheduled_for_deletion?
+  end
 
   def messenger
     (self.class.name.to_s << "Messenger").constantize
