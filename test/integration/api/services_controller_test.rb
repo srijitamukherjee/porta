@@ -82,7 +82,7 @@ class Api::ServicesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  class ActAsProduct < Api::ServicesControllerTest
+  class BackendApiSelection < Api::ServicesControllerTest
     def setup
       super
       Logic::RollingUpdates.stubs(enabled?: true)
@@ -90,45 +90,26 @@ class Api::ServicesControllerTest < ActionDispatch::IntegrationTest
       @provider.settings.allow_multiple_services!
     end
 
-    test 'should mark that service will act as product if feature is enabled' do
-      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(true).at_least_once
-
-      assert_change of: -> { Service.count } do
+    test 'should not create a new Backend API if no option was selected' do
+      assert_change of: -> { BackendApi.count }, by: 0 do
         post admin_services_path, service: {
           system_name: 'my_new_product',
           name: 'My new Product',
           description: 'This will act as product',
-          act_as_product: true
+          backend_api: ''
         }
       end
-      assert Service.last.act_as_product
-      assert_equal 1, Service.last.backend_api_configs.count
+
+      assert_equal 0, Service.last.backend_api_configs.count
     end
 
-    test 'should not mark that service will act as product if feature is not enabled' do
-      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(false).at_least_once
-
-      assert_change of: -> { Service.count } do
+    test 'should create a new Backend API if Create New Backend Api was selected' do
+      assert_change of: -> { BackendApi.count }, by: 1 do
         post admin_services_path, service: {
           system_name: 'my_new_product',
           name: 'My new Product',
           description: 'This will act as product',
-          act_as_product: true
-        }
-      end
-      refute Service.last.act_as_product
-      assert_equal 1, Service.last.backend_api_configs.count
-    end
-
-    test 'should create a new Backend API if none was selected' do
-      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(true).at_least_once
-
-      assert_change of: -> { BackendApi } do
-        post admin_services_path, service: {
-          system_name: 'my_new_product',
-          name: 'My new Product',
-          description: 'This will act as product',
-          act_as_product: true
+          backend_api: 'new'
         }
       end
 
@@ -136,10 +117,9 @@ class Api::ServicesControllerTest < ActionDispatch::IntegrationTest
     end
 
     test 'should reuse the same Backend API if it was selected' do
-      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(true).at_least_once
       backend_api = FactoryBot.create(:backend_api, account: @provider)
 
-      assert_change of: -> { BackendApi }, by: 0 do
+      assert_change of: -> { BackendApi.count }, by: 0 do
         post admin_services_path, service: {
           system_name: 'my_new_product',
           name: 'My new Product',
@@ -151,6 +131,20 @@ class Api::ServicesControllerTest < ActionDispatch::IntegrationTest
 
       assert_equal backend_api, Service.last.backend_api
       assert_equal 1, Service.last.backend_api_configs.count
+    end
+
+    test 'should not create Backend API if rolling update is not enabled' do
+      Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(false).at_least_once
+
+      assert_change of: -> { BackendApi.count }, by: 0 do
+        post admin_services_path, service: {
+          system_name: 'my_new_product',
+          name: 'My new Product',
+          description: 'This will act as product',
+          backend_api: 'new'
+        }
+      end
+      assert_equal 0, Service.last.backend_api_configs.count
     end
   end
 end

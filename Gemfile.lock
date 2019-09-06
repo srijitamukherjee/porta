@@ -513,6 +513,8 @@ GEM
     pry-doc (0.9.0)
       pry (~> 0.9)
       yard (~> 0.8)
+    pry-nav (0.3.0)
+      pry (>= 0.9.10, < 0.13.0)
     pry-rails (0.3.4)
       pry (>= 0.9.10)
     pry-stack_explorer (0.4.9.2)
@@ -906,6 +908,7 @@ DEPENDENCIES
   prometheus-client-mmap
   protected_attributes (~> 1.1.4)
   pry-doc (>= 0.8)
+  pry-nav
   pry-rails
   pry-stack_explorer
   rack-no_animations (~> 1.0.3)
