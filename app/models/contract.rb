@@ -111,7 +111,7 @@ class Contract < ApplicationRecord
   delegate :paid?, :to => :plan
 
   def counter_culture_enabled?
-    !provider_account.scheduled_for_deletion?
+    !provider_account.scheduled_for_deletion? || issuer.deleted?
   end
 
   def messenger
