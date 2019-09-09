@@ -23,7 +23,7 @@ class Contract < ApplicationRecord
   after_commit :notify_plan_changed
 
   belongs_to :plan
-  counter_culture :plan, column_name: proc { |object| object.counter_culture_enabled? ? :contracts_count : nil }
+  counter_culture :plan, column_name: proc { |object| object.counter_culture_enabled? ? :contracts_count : nil }, column_names: { true => :contracts_count }
 
   validate :correct_plan_subclass?
   # this breaks nested saving of records, when validating there is no user_account yet, its new record
