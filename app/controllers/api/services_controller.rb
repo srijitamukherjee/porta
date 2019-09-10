@@ -36,7 +36,6 @@ class Api::ServicesController < Api::BaseController
 
   def create
     @service = APIS::APIBuilderService.new(current_account).build(params)
-    @service.backend_api_configs = build_backend_api_configs
 
     if can_create? && @service.save
       flash[:notice] =  'Service created.'
@@ -67,12 +66,6 @@ class Api::ServicesController < Api::BaseController
   end
 
   private
-
-  def build_backend_api_configs
-    return [] if !provider_can_use?(:api_as_product) || params[:service][:backend_api].blank?
-    backend_api = current_account.backend_apis.find(params[:service][:backend_api])
-    [BackendApiConfig.new(backend_api: backend_api)]
-  end
 
   protected
 

@@ -10,7 +10,7 @@ class Api::ServicesControllerTest < ActionDispatch::IntegrationTest
     login! @provider
   end
 
-  attr_reader :service
+  attr_reader :service, :provider
 
   class OldEmptyAttributesTest < Api::ServicesControllerTest
     test 'update with empty attributes' do
@@ -94,8 +94,8 @@ class Api::ServicesControllerTest < ActionDispatch::IntegrationTest
     def setup
       super
       Logic::RollingUpdates.stubs(enabled?: true)
-      Account.any_instance.stubs(:provider_can_use?).returns(true)
-      @provider.settings.allow_multiple_services!
+      Account.any_instance.stubs(:provider_can_use?).returns(false)
+      provider.settings.allow_multiple_services!
     end
 
     test 'should create a new Backend API if none was selected' do
