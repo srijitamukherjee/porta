@@ -39,7 +39,7 @@ class BackendMetricWorkerTest < ActiveSupport::TestCase
   test '#retry_job reenqueues the job' do
     args = ['foo', 'bar']
     worker = BackendMetricWorker.new
-    BackendMetricWorker.expects(:sync).with(*args)
+    BackendMetricWorker.expects(:perform_async).with(*args)
     worker.send(:retry_job, *args)
   end
 
@@ -47,7 +47,7 @@ class BackendMetricWorkerTest < ActiveSupport::TestCase
     args = ['foo', 'bar']
     worker = BackendMetricWorker.new
     worker.expects(:last_attempt?).returns(true)
-    BackendMetricWorker.expects(:sync).with(*args).never
+    BackendMetricWorker.expects(:perform_async).with(*args).never
     assert_raises(BackendMetricWorker::LockError) { worker.send(:retry_job, *args) }
   end
 end
