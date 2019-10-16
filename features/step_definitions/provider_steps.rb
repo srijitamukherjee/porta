@@ -85,6 +85,8 @@ Given(/^a provider signs up and activates his account$/) do
   email = open_email(user.email, with_subject: 'Account Activation')
   click_first_link_in_email(email)
 
+  step 'stub integration errors dashboard'
+
   within login_form do
     fill_in 'Email', with: user.email
     fill_in 'Password', with: 'supersecret'
@@ -295,6 +297,6 @@ Then(/^new tenant should be not created$/) do
   end
 end
 
-Given /^the account has Service acting as Product$/ do
+Given /^the account has api_as_product rolling update enabled$/ do
   @provider.stubs(:provider_can_use?).with(:api_as_product).returns(true)
 end

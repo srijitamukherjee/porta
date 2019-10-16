@@ -5,6 +5,8 @@ class Proxy < ApplicationRecord
   include AfterCommitQueue
   include BackendApiLogic::ProxyExtension
   prepend BackendApiLogic::RoutingPolicy
+  include GatewaySettings::ProxyExtension
+  include ProxyConfigAffectingChanges::ProxyExtension
 
   DEFAULT_POLICY = { 'name' => 'apicast', 'humanName' => 'APIcast policy', 'description' => 'Main functionality of APIcast.',
                      'configuration' => {}, 'version' => 'builtin', 'enabled' => true, 'removable' => false, 'id' => 'apicast-policy'  }.freeze
@@ -102,9 +104,13 @@ class Proxy < ApplicationRecord
   alias_attribute :production_endpoint, :endpoint
   alias_attribute :staging_endpoint, :sandbox_endpoint
 
-  delegate :account, to: :service, allow_nil: true
-  delegate :provider_can_use?, to: :account, allow_nil: true
+  delegate :account, to: :service
+  delegate :provider_can_use?, to: :account
   delegate :backend_apis, :backend_api_configs, to: :service
+
+  def self.user_attribute_names
+    super + %w[api_backend] + GatewayConfiguration::ATTRIBUTES
+  end
 
   # This smells of :reek:NilCheck
   def authentication_method
@@ -139,10 +145,8 @@ class Proxy < ApplicationRecord
 
   def policy_chain
     # TODO: We need to remove this rolling update as it should be available for everyone using APIcast V2
-    return unless provider_can_use?(:policies)
-    raw_config = policies_config
-    return if raw_config.blank?
-    raw_config.each_with_object([]) do |config, chain|
+    return [] unless provider_can_use?(:policies)
+    (policies_config.presence || []).each_with_object([]) do |config, chain|
       chain << config.slice('name', 'version', 'configuration') if config['enabled']
     end
   end

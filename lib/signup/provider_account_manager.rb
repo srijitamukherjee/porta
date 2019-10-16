@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Signup::ProviderAccountManager < Signup::AccountManager
-  self.account_builder = lambda do |account|
+  self.account_builder = ->(account) do
     account.provider = true
     account.sample_data = true
     account.email_all_users = true
@@ -28,8 +28,12 @@ class Signup::ProviderAccountManager < Signup::AccountManager
 
   def contract_plans_and_create_service(account, plans, defaults)
     create_contract_plans_for_account!(account, plans, defaults)
-    account.services.create! name: 'API'
+    create_first_service(account)
     set_switches_and_limits(account, plans.application_plan)
+  end
+
+  def create_first_service(account)
+    ServiceCreator.new(service: account.services.build(name: 'API')).call(private_endpoint: BackendApi.default_api_backend)
   end
 
   def set_switches_and_limits(account, application_plan)

@@ -40,6 +40,10 @@ class Api::ServicesControllerTest < ActionController::TestCase
   end
 
   test 'settings with finance allowed' do
+    Account.any_instance.stubs(:provider_can_use?).returns(true)
+    Account.any_instance.stubs(:provider_can_use?).with(:api_as_product).returns(false | true)
+    rolling_update(:api_as_product, enabled: false)
+
     @provider.settings.finance.allow
 
     login_as @provider.admins.first
@@ -81,7 +85,7 @@ class Api::ServicesControllerTest < ActionController::TestCase
   def test_update_handles_missing_referrer
     put :update, id: @service.id
 
-    assert_response 302
+    assert_response 400
   end
 
   def test_service_create_should_change_api_bubble_state
@@ -112,6 +116,6 @@ class Api::ServicesControllerTest < ActionController::TestCase
 
     put :update, id: @service.id, service: { name: 'Supetramp' }
 
-    assert_response 200
+    assert_response 302
   end
 end

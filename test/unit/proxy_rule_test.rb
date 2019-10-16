@@ -1,7 +1,7 @@
 require 'test_helper'
 
-class ProxyRuleTest < ActiveSupport::TestCase
 
+class ProxyRuleTest < ActiveSupport::TestCase
   test 'patterns' do
     proxy_rule = FactoryBot.build_stubbed(:proxy_rule)
 
@@ -151,9 +151,37 @@ class ProxyRuleTest < ActiveSupport::TestCase
     assert proxy_proxy_rule.valid?
     assert_equal proxy, proxy_proxy_rule.owner
 
-    backend_api = BackendApi.create(name: 'API', system_name: 'api', account: provider)
+    backend_api = FactoryBot.create(:backend_api, name: 'API', system_name: 'api', account: provider)
     backend_proxy_rule = FactoryBot.build(:proxy_rule, proxy: nil, owner: backend_api)
     assert_equal backend_api, backend_proxy_rule.owner
     assert backend_proxy_rule.valid?
+  end
+
+  class ProxyConfigAffectingChangesTest < ActiveSupport::TestCase
+    disable_transactional_fixtures!
+
+    test 'proxy config affecting changes of object owned by proxy' do
+      proxy = FactoryBot.create(:proxy)
+      proxy_rule = FactoryBot.build(:proxy_rule, owner: proxy, pattern: '/some-pattern')
+
+      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(proxy, proxy_rule).times(3)
+
+      proxy_rule.save!
+      proxy_rule.update_attributes(pattern: '/new-pattern')
+      proxy_rule.destroy!
+    end
+
+    test 'proxy config affecting changes of object owned by backend_api' do
+      backend_api = FactoryBot.create(:backend_api)
+      products = FactoryBot.create_list(:simple_service, 2)
+      proxy_rule = FactoryBot.build(:proxy_rule, owner: backend_api, pattern: '/some-pattern')
+      products.each { |product| product.backend_api_configs.create(backend_api: backend_api, path: '/') }
+
+      products.each { |product| ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(product.proxy, proxy_rule).times(3) }
+
+      proxy_rule.save!
+      proxy_rule.update_attributes(pattern: '/new-pattern')
+      proxy_rule.destroy!
+    end
   end
 end

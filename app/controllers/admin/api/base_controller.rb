@@ -129,6 +129,11 @@ class Admin::Api::BaseController < ApplicationController
   ##~ @parameter_service_id_by_id = {:name => "id", :description => "ID of the service.", :dataType => "int", :required => true, :paramType => "path", :threescale_name => "service_ids"}
   ##~ @parameter_service_id_by_id_name = {:name => "service_id", :description => "ID of the service.", :dataType => "int", :required => true, :paramType => "path", :threescale_name => "service_ids"}
 
+  ## BackendAPIs
+
+  ##~ @parameter_backend_api_id_by_id = { :name => "id", :description => "ID of the Backend.", :dataType => "int", :required => true, :paramType => "path" }
+  ##~ @parameter_backend_api_id_by_id_name = { :name => "backend_api_id", :description => "ID of the Backend.", :dataType => "int", :required => true, :paramType => "path" }
+
   ## Features
 
   ##~ @parameter_feature_id_by_id = {:name => "id", :description => "ID of the feature.", :dataType => "int", :required => true, :paramType => "path" }
@@ -168,6 +173,10 @@ class Admin::Api::BaseController < ApplicationController
   ## ActiveDocs
 
   ##~ @parameter_active_doc_id_by_id = {:name => "id", :description => "ID of the ActiveDocs spec", :dataType => "int", :required => true, :paramType => "path"}
+
+  ## MappingRules
+
+  ##~ @parameter_mapping_rule_id_by_id = {name: "id", description: "Mapping Rule ID.", dataType: "int", paramType: "path", required: true}
 
   ## Extra
 

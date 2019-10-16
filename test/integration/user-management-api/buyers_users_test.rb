@@ -1,4 +1,4 @@
-require File.expand_path(File.dirname(__FILE__) + '/../../test_helper')
+require 'test_helper'
 
 class Admin::Api::BuyerUsersTest < ActionDispatch::IntegrationTest
   include FieldsDefinitionsHelpers
@@ -297,7 +297,7 @@ class Admin::Api::BuyerUsersTest < ActionDispatch::IntegrationTest
   end
 
   test "create sends no email" do
-    assert_no_change :of => lambda { ActionMailer::Base.deliveries.count } do
+    assert_no_change :of => -> { ActionMailer::Base.deliveries.count } do
       post(admin_api_account_users_path(:account_id => @buyer.id,
                                              :format => :xml),
                 :username => 'chuck',
@@ -591,7 +591,7 @@ class Admin::Api::BuyerUsersTest < ActionDispatch::IntegrationTest
 
   test 'activate sends no email' do
     chuck = FactoryBot.create :user, :account => @buyer
-    assert_no_change :of => lambda { ActionMailer::Base.deliveries.count } do
+    assert_no_change :of => -> { ActionMailer::Base.deliveries.count } do
       put "/admin/api/accounts/#{@buyer.id}/users/#{chuck.id}/activate.xml?provider_key=#{@provider.api_key}"
     end
     assert_response :success

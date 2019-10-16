@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class Provider::Admin::BackendApisControllerTest < ActionDispatch::IntegrationTest
+  include ActiveJob::TestHelper
+
   setup do
     @provider = FactoryBot.create(:provider_account)
     FactoryBot.create_list(:backend_api, 2, account: @provider)
@@ -22,9 +24,23 @@ class Provider::Admin::BackendApisControllerTest < ActionDispatch::IntegrationTe
     assert_response :success
   end
 
+  test '#show only accessible services' do
+    backend_api = @provider.backend_apis.last
+
+    services = FactoryBot.create_list(:simple_service, 3, account: @provider)
+    services.each { |service| service.backend_api_configs.create(backend_api: backend_api, path: '/') }
+    accessible_services = services.take(2)
+    non_accessible_service = services.last
+    non_accessible_service.update_column(:state, 'deleted')
+
+    get provider_admin_backend_api_path(backend_api)
+    accessible_services.each { |service| assert_select 'ul.listing#products_using_backend li a', text: service.name }
+    assert_select 'ul.listing#products_using_backend li a', text: non_accessible_service.name, count: 0
+  end
+
   test '#create' do
     assert_difference @provider.backend_apis.method(:count) do
-      backend_api_attributes = { name: 'My Backend API', system_name: 'my-new-backend-api', private_endpoint: 'https://host.com/p' }
+      backend_api_attributes = { name: 'My Backend', system_name: 'my-new-backend-api', private_endpoint: 'https://host.com/p' }
       post provider_admin_backend_apis_path(backend_api: backend_api_attributes)
     end
     assert_response :redirect
@@ -46,30 +62,35 @@ class Provider::Admin::BackendApisControllerTest < ActionDispatch::IntegrationTe
   end
 
   test 'system_name can be created but not updated' do
-    post provider_admin_backend_apis_path, { backend_api: {name: 'My Backend API', system_name: 'first-system-name'} }
+    post provider_admin_backend_apis_path, { backend_api: {name: 'My Backend', system_name: 'first-system-name', private_endpoint: 'https://endpoint.com/p'} }
     backend_api = provider.backend_apis.last!
     assert_equal 'first-system-name', backend_api.system_name
 
-    put provider_admin_backend_api_path(backend_api, { backend_api: {name: 'My Backend API', system_name: 'my-new-backend-api'} })
+    put provider_admin_backend_api_path(backend_api, { backend_api: {name: 'My Backend', system_name: 'my-new-backend-api'} })
     assert_equal 'first-system-name', backend_api.reload.system_name
   end
 
-  test 'delete a backend api with products' do
-    backend_api = @provider.backend_apis[0]
+  test 'delete a backend api without any products will schedule to delete in background' do
+    backend_api = @provider.backend_apis.order(:id).second
+    backend_api.backend_api_configs.delete_all
+    assert_not backend_api.backend_api_configs.any?
+
+    perform_enqueued_jobs do
+      delete provider_admin_backend_api_path(backend_api)
+      assert_redirected_to provider_admin_dashboard_path
+      assert_not BackendApi.exists? backend_api.id
+      assert_equal 'Backend will be deleted shortly.', flash[:notice]
+    end
+  end
+
+  test 'delete a backend api with products shows the correct error message' do
+    backend_api = @provider.backend_apis.order(:id).first!
     assert backend_api.backend_api_configs.any?
 
-    delete provider_admin_backend_api_path(backend_api)
-    assert BackendApi.exists? backend_api.id
-    assert_equal 'Backend API could not be deleted', flash[:error]
-  end
-  
-  test 'delete a backend api without any products' do
-    backend_api = @provider.backend_apis[1]
-    assert_not backend_api.backend_api_configs.any?
-    
-    delete provider_admin_backend_api_path(backend_api)
-    assert_redirected_to provider_admin_dashboard_path
-    assert_not BackendApi.exists? backend_api.id
-    assert_equal 'Backend API deleted', flash[:notice]
+    perform_enqueued_jobs do
+      delete provider_admin_backend_api_path(backend_api)
+      assert backend_api.reload.published?
+      assert_equal 'cannot be deleted because it is used by at least one Product', flash[:error]
+    end
   end
 end

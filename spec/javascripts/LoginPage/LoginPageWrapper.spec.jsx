@@ -1,10 +1,7 @@
 import React from 'react'
-import Enzyme, {mount} from 'enzyme'
-import Adapter from 'enzyme-adapter-react-16'
+import {mount} from 'enzyme'
 
 import {SimpleLoginPage, Login3scaleForm, RequestPasswordForm} from 'LoginPage'
-
-Enzyme.configure({adapter: new Adapter()})
 
 const props = {
   enforceSSO: false,
@@ -14,7 +11,8 @@ const props = {
   providerPasswordPath: 'password-path',
   providerSessionsPath: 'sessions-path',
   redirectUrl: 'redirect-url',
-  show3scaleLoginForm: true
+  show3scaleLoginForm: true,
+  session: {username: ''}
 }
 
 it('should render itself', () => {

@@ -24,7 +24,7 @@ Feature: Multiservice feature
     When I am on the provider dashboard
      And I follow "New Product"
      And I fill in "Name" with "Less fancy API"
-     And I press "Add API"
+     And I press "Create Product"
     Then I should see "Less fancy API"
 
   @wip
@@ -41,6 +41,7 @@ Feature: Multiservice feature
   @javascript
   Scenario: Edit service
     Given I am logged in as provider "foo.example.com"
+      And all the rolling updates features are off
       And I am on the edit page for service "Fancy API" of provider "foo.example.com"
     When I fill in "Name" with "Less fancy API"
      And I press "Update Service"
@@ -55,4 +56,20 @@ Feature: Multiservice feature
     And provider "foo.example.com" has "multiple_services" switch allowed
     And I am on the edit page for service "Second service" of provider "foo.example.com"
     When I follow "I understand the consequences, proceed to delete 'Second service' service" and I confirm dialog box
+    Then I should see "Product 'Second service' will be deleted shortly."
+
+  Scenario: Delete Service without apiap
+    Given I am logged in as provider "foo.example.com"
+    And provider "foo.example.com" has "multiple_services" switch allowed
+    And I have rolling updates "api_as_product" disabled
+    And I am on the edit page for service "Second service" of provider "foo.example.com"
+    When I follow "I understand the consequences, proceed to delete 'Second service' service" and I confirm dialog box
     Then I should see "Service 'Second service' will be deleted shortly."
+
+  @javascript
+  Scenario: Folded services have no overview data
+    Given I am logged in as provider "foo.example.com"
+    And provider "foo.example.com" has "multiple_services" switch allowed
+    When I am on the provider dashboard
+    And service "Fancy API" is folded
+    Then I should not see "Fancy API" overview data

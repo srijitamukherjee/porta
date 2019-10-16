@@ -43,6 +43,10 @@ module BackendApiLogic
           @config = config
         end
 
+        def config_path
+          @config_path ||= ConfigPath.new(path)
+        end
+
         def as_json
           return if private_endpoint.blank?
           {
@@ -51,18 +55,16 @@ module BackendApiLogic
               operations: [
                 match: :path,
                 op: :matches,
-                value: path_to_regex
+                value: config_path.to_regex
               ]
             }
-          }
+          }.merge(replace_path)
         end
 
-        def path_to_regex
-          if path.to_s.empty?
-            "/.*"
-          else
-            "/#{path}/.*|/#{path}/?"
-          end
+        def replace_path
+          return {} if config_path.blank?
+
+          { replace_path: "{{original_request.path | remove_first: '#{config_path.path}'}}" }
         end
       end
       private_constant :Rule

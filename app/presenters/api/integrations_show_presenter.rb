@@ -1,8 +1,12 @@
+# frozen_string_literal: true
+
 class Api::IntegrationsShowPresenter
 
   def initialize(proxy)
     @proxy = proxy
   end
+
+  attr_reader :proxy
 
   def production_proxy_endpoint
     last_production_config.production_endpoint || proxy.default_production_endpoint
@@ -18,6 +22,15 @@ class Api::IntegrationsShowPresenter
 
   def last_production_config
     @last_production_config ||= proxy_configs.production.last!
+  end
+
+  def next_sandbox_config_version
+    any_sandbox_configs? ? last_sandbox_config.version + 1 : 1
+  end
+
+  def next_production_config_version
+    return unless any_sandbox_configs?
+    last_sandbox_config.version
   end
 
   def any_sandbox_configs?
@@ -40,22 +53,38 @@ class Api::IntegrationsShowPresenter
     end
   end
 
-  def test_state_modifier
-    case @proxy.api_test_success
-    when true
-      'is-successful'.freeze
-    when false
-      'is-erroneous'.freeze
+  def apiap?
+    provider_can_use? :api_as_product
+  end
+
+  def apicast_config_ready?
+    if apiap?
+      proxy.service.backend_apis.any?
     else
-      'is-untested'.freeze
+      any_sandbox_configs?
     end
   end
 
+  def test_state_modifier
+    return 'is-untested' if @proxy.account.provider_can_use?(:api_as_product)
+
+    case @proxy.api_test_success
+    when true
+      'is-successful'
+    when false
+      'is-erroneous'
+    else
+      'is-untested'
+    end
+  end
+
+  delegate :pending_affecting_changes?, :service, to: :proxy
+
+  private :proxy
+
   private
 
-  attr_reader :proxy
-
-  delegate :proxy_configs, to: :proxy
+  delegate :proxy_configs, :provider_can_use?, to: :proxy
 
   def sandbox_version
     @sandbox_version ||= last_version_of(:sandbox) if any_sandbox_configs?

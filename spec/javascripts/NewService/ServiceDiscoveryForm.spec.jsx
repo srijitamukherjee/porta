@@ -1,21 +1,15 @@
 // @flow
 
 import React from 'react'
-import Enzyme, {shallow, mount} from 'enzyme'
-import Adapter from 'enzyme-adapter-react-16'
+import {shallow, mount} from 'enzyme'
 
 import {ServiceDiscoveryForm} from 'NewService'
-import {FormWrapper, ErrorMessage,
-  ServiceDiscoveryListItems} from 'NewService/components/FormElements'
-
+import {FormWrapper, ErrorMessage, ServiceDiscoveryListItems} from 'NewService/components/FormElements'
 import * as utils from 'utilities/utils'
-jest.spyOn(utils, 'CSRFToken')
-  .mockImplementation(() => '')
-
-Enzyme.configure({adapter: new Adapter()})
 
 const props = {
   formActionPath: 'action-path',
+  apiap: false,
   setLoadingProjects: () => {}
 }
 
@@ -27,12 +21,12 @@ it('should render itself', () => {
 })
 
 it('should render `FormWrapper` child', () => {
-  const wrapper = mount(<ServiceDiscoveryForm {...props}/>)
+  const wrapper = shallow(<ServiceDiscoveryForm {...props}/>)
   expect(wrapper.find(FormWrapper).exists()).toEqual(true)
 })
 
 it('should render `ServiceDiscoveryListItems` child', () => {
-  const wrapper = mount(<ServiceDiscoveryForm {...props}/>)
+  const wrapper = shallow(<ServiceDiscoveryForm {...props}/>)
   expect(wrapper.find(ServiceDiscoveryListItems).exists()).toEqual(true)
 })
 
@@ -70,5 +64,13 @@ describe('fetchProjects', () => {
 
     expect(useState).toHaveBeenCalled()
     expect(fetch).toHaveBeenCalled()
+  })
+})
+
+describe('when Api as Product is enabled', () => {
+  props.apiap = true
+  it('should render itself', () => {
+    const wrapper = mount(<ServiceDiscoveryForm {...props}/>)
+    expect(wrapper.find('.important-button.create').props().value).toEqual('Create Product')
   })
 })

@@ -567,7 +567,7 @@ en:
           /foo/bar/baz requests.</p>
         curl:
           no_application_plan:
-            Start with creating an application plan.
+            Start by creating an application plan.
           no_application:
             In order to send a valid test request, please create an application that subscribes to an application plan of this service.
 
@@ -588,9 +588,9 @@ en:
       plugin_csharp: .NET Plugin
       service_mesh_istio: Istio Service Mesh
 
-    self_managed: APIcast self-managed<span>Manage your own NGINX based API gateway for ultimate flexibility and customization.</span>
-    hosted: APIcast<span>a 3scale managed NGINX based API gateway for quick and reliable integrations</span>
-    apicast: APIcast<span>Nginx reverse proxy server.</span>
+    self_managed: APIcast self-managed <span>Manage your own NGINX based API gateway for ultimate flexibility and customization.</span>
+    hosted: APIcast <span>a 3scale managed NGINX based API gateway for quick and reliable integrations</span>
+    apicast: APIcast <span>Nginx reverse proxy server.</span>
 
     service_mesh_istio: |
       Istio
@@ -857,6 +857,8 @@ en:
                 'wildcards' - words inside curly brackets ('{}')
         backend_api:
           attributes:
+            base:
+              cannot_be_destroyed_with_products: cannot be deleted because it is used by at least one Product
             private_endpoint:
               invalid: "the accepted format is 'http(s)://address(:port)(/path)'"
         proxy:
@@ -1132,6 +1134,16 @@ en:
         notice: "Thanks for signing up! You can now sign in."
       already_logged_in: 'You are already signed up. Log out if you want to sign up again.'
 
+    services:
+      create:
+        notice: "%{resource_type} created."
+        error: "Couldn't create %{resource_type}. Check your Plan limits" # TODO: this is not always true... there are other reasons of failure
+      update:
+        notice: "%{resource_type} information updated."
+        error: "Couldn't update %{resource_type}."
+      destroy:
+        notice: "%{resource_type} '%{resource_name}' will be deleted shortly. You will receive a notification when it is done"
+
   proxy:
     credentials_location:
       headers: "As HTTP Headers"
@@ -1246,6 +1258,10 @@ en:
         secret_token: |
           Enables you to block any direct developer requests to your API backend; each 3scale API gateway call to your API backend contains a request header called <code>X-3scale-proxy-secret-token</code>.
           The value of this header can be set by you here. It's up to you ensure your backend only allows calls with this secret header.
+        jwt_claim_with_client_id_type: |
+          Process the ClientID Token Claim value as a string or as a liquid template. When set to 'Liquid' you can define more complex rules. e.g. If 'some_claim' is an array you can select the first value this like {{ some_claim | first }}.
+        jwt_claim_with_client_id: |
+          The Token Claim that contains the clientID. Defaults to 'azp'.
 
 
       service:
@@ -1265,6 +1281,8 @@ en:
 
       proxy:
         update: "%{action} Staging Environment"
+      policies:
+        update: "Update Policy Chain"
     labels:
       service:
         intentions_required: "Signup requires a description of intended use"

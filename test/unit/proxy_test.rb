@@ -79,7 +79,7 @@ class ProxyTest < ActiveSupport::TestCase
       rolling_updates_on
 
       account = FactoryBot.create(:simple_provider)
-      service = FactoryBot.create(:simple_service, account: account)
+      service = FactoryBot.create(:simple_service, :with_default_backend_api, account: account)
       null_backend_api = FactoryBot.create(:backend_api, account: account, private_endpoint: 'https://foo.baz')
       null_backend_api.update_columns(private_endpoint: '')
       backend_api1 = FactoryBot.create(:backend_api, account: account, private_endpoint: 'https://private-1.example.com')
@@ -91,8 +91,8 @@ class ProxyTest < ActiveSupport::TestCase
         {"name"=>"routing", "version"=>"builtin", "enabled"=>true,
           "configuration"=>{
             "rules"=>[
-              {"url"=>"https://private-2.example.com:443", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"/foo/bar/.*|/foo/bar/?"}]}},
-              {"url"=>"https://private-1.example.com:443", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"/foo/.*|/foo/?"}]}},
+              {"url"=>"https://private-2.example.com:443", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"/foo/bar/.*|/foo/bar/?"}]}, 'replace_path'=>"{{original_request.path | remove_first: '/foo/bar'}}"},
+              {"url"=>"https://private-1.example.com:443", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"/foo/.*|/foo/?"}]}, 'replace_path'=>"{{original_request.path | remove_first: '/foo'}}"},
               {"url"=>"https://echo-api.3scale.net:443", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"/.*"}]}}
             ]
           }
@@ -240,8 +240,8 @@ class ProxyTest < ActiveSupport::TestCase
     assert_equal 1, @proxy.proxy_rules.size
   end
 
-  test 'api_backend defaults to echo API' do
-    assert_equal 'https://echo-api.3scale.net:443', @proxy.api_backend
+  test 'api_backend defaults to nil if there is no backend api' do
+    assert_nil @proxy.api_backend
   end
 
   test 'proxy api backend formats ok' do
@@ -255,6 +255,7 @@ class ProxyTest < ActiveSupport::TestCase
     @account.stubs(:provider_can_use?).with(:apicast_v1).returns(true)
     @account.stubs(:provider_can_use?).with(:apicast_v2).returns(true)
     @account.expects(:provider_can_use?).with(:proxy_private_base_path).at_least_once.returns(false)
+    @account.expects(:provider_can_use?).with(:api_as_product).at_least_once.returns(false)
     backend_api = @proxy.backend_api
     backend_api.stubs(account: @account)
     @proxy.api_backend = 'https://example.org:3/path'
@@ -604,5 +605,81 @@ class ProxyTest < ActiveSupport::TestCase
 
   def analytics
     ThreeScale::Analytics::UserTracking.any_instance
+  end
+
+  test 'affecting change' do
+    refute ProxyConfigAffectingChange.find_by(proxy_id: @proxy.id)
+    @proxy.affecting_change_history
+    assert ProxyConfigAffectingChange.find_by(proxy_id: @proxy.id)
+  end
+
+  test '#pending_affecting_changes?' do
+    proxy = FactoryBot.create(:simple_proxy, api_backend: nil)
+    proxy.affecting_change_history.touch
+
+    # no existing config for staging (sandbox)
+    refute proxy.pending_affecting_changes?
+
+    Timecop.travel(1.second.from_now) do
+      FactoryBot.create(:proxy_config, proxy: proxy, environment: :sandbox)
+
+      # latest config is ahead of affecting change record
+      refute proxy.pending_affecting_changes?
+
+      proxy.affecting_change_history.touch
+
+      # latest config is behind of affecting change record
+      assert proxy.pending_affecting_changes?
+    end
+  end
+
+  test '#affecting_change_history with fibers' do
+    class ProxyWithFiber < ::Proxy
+      def create_proxy_config_affecting_change(*)
+        Fiber.yield
+        super
+      end
+    end
+
+    service = FactoryBot.create(:simple_service)
+    proxy = ProxyWithFiber.find(service.proxy.id)
+
+    f1 = Fiber.new { proxy.affecting_change_history }
+    f2 = Fiber.new { proxy.affecting_change_history }
+
+    f1.resume
+    assert_nothing_raised(ActiveRecord::RecordNotUnique) do
+      f2.resume
+      f1.resume
+      f2.resume
+    end
+    assert_equal 1, ProxyConfigAffectingChange.where(proxy: proxy).count
+  end
+
+  class ProxyConfigAffectingChangesTest < ActiveSupport::TestCase
+    disable_transactional_fixtures!
+
+    test 'proxy config affecting changes on create' do
+      proxy = FactoryBot.build(:simple_proxy, api_backend: nil)
+      # Proxy creation itself is not an affecting change...
+      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(proxy, proxy).never
+      # ...but creation of first default proxy rule ('/') is
+      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(proxy, instance_of(ProxyRule))
+      proxy.save!
+    end
+
+    test 'proxy config affecting changes on update' do
+      provider = FactoryBot.create(:simple_provider)
+      service = FactoryBot.create(:simple_service, account: provider)
+      proxy = service.proxy
+
+      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(proxy, proxy).twice
+
+      proxy.update_attributes(policies_config: [{ name: '1', version: 'b', configuration: {} }])
+      proxy.update_attributes(deployed_at: Time.utc(2019, 9, 26, 12, 20))
+
+      # A stale update is not an affecting change
+      proxy.update_attributes(updated_at: Time.utc(2019, 9, 26, 12, 20))
+    end
   end
 end

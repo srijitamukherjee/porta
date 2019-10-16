@@ -3,7 +3,7 @@ require 'test_helper'
 class Api::IntegrationsControllerTest < ActionController::TestCase
 
   def setup
-    @provider = FactoryBot.create(:provider_account)
+    @provider = FactoryBot.create(:provider_account, :with_default_backend_api)
     @provider.default_service.service_tokens.create!(value: 'token')
 
     stub_apicast_registry
@@ -24,7 +24,7 @@ class Api::IntegrationsControllerTest < ActionController::TestCase
 
   test 'should have access' do
     rolling_updates_off
-    
+
     member = FactoryBot.create(:member)
     member.member_permissions.create(admin_section: 'plans')
     @provider.users << member
@@ -123,6 +123,8 @@ class Api::IntegrationsControllerTest < ActionController::TestCase
   end
 
   test 'update custom public endpoint with proxy_pro enabled' do
+    rolling_updates_off
+    
     Proxy.any_instance.stubs(deploy: true)
     ProxyTestService.any_instance.stubs(:disabled?).returns(true)
 
@@ -136,6 +138,8 @@ class Api::IntegrationsControllerTest < ActionController::TestCase
   end
 
   test 'create proxy config with proxy_pro enabled' do
+    rolling_updates_off
+
     proxy = @provider.default_service.proxy
     proxy.update_column(:apicast_configuration_driven, true)
 

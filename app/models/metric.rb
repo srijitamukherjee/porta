@@ -42,7 +42,7 @@ class Metric < ApplicationRecord
   # depend on the database implementation. In order to ensure that behavior, use User.order(:id).first instead.
   #
   default_scope -> { order(:id) }
-  scope :top_level, lambda { where(parent_id: nil) }
+  scope :top_level, -> { where(parent_id: nil) }
   scope :order_by_unit, -> { order('unit') }
 
   # Create one of the predefined, default metrics.
@@ -98,6 +98,10 @@ class Metric < ApplicationRecord
     end
   end
 
+  def hits?
+    default?(:hits)
+  end
+
   def child?
     parent_id.present?
   end
@@ -119,18 +123,12 @@ class Metric < ApplicationRecord
     self[:unit] = value unless child?
   end
 
-  def is_a_method?
-    child?
-  end
+  alias method_metric? child?
 
   def to_xml(options = {})
     xml = options[:builder] || ThreeScale::XML::Builder.new
 
-    metric_or_method = if self.is_a_method?
-                         "method"
-                       else
-                         "metric"
-                       end
+    metric_or_method = method_metric? ? 'method' : 'metric'
 
     xml.__send__(:method_missing, metric_or_method) do |xml|
       xml.id_           id unless new_record?
@@ -139,10 +137,9 @@ class Metric < ApplicationRecord
       xml.friendly_name friendly_name
       xml.service_id    service_id
       xml.description   description
-      if self.is_a_method?
-        xml.metric_id self.parent_id
-      end
-      unless self.is_a_method?
+      if method_metric?
+        xml.metric_id parent_id
+      else
         xml.unit unit
       end
     end

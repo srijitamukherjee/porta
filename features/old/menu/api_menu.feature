@@ -36,7 +36,10 @@ Feature: API menu
     | Listing                   |
     | Application Plans         |
 
-  Scenario: Integration sub menu structure
+  Scenario: Integration sub menu structure provider has api as product enabled
+    Given the account has api_as_product rolling update enabled
+    And I have api_as_product feature disabled
+    When I follow "Overview"
     When I follow "Integration" within the main menu
     Then I should see menu items
     | Configuration             |
@@ -44,8 +47,8 @@ Feature: API menu
     | Mapping Rules             |
     | Settings                  |
 
-  Scenario: Integration sub menu structure without independent mapping rules
-    Given I have independent_mapping_rules feature disabled
+  Scenario: Integration sub menu structure when provider does not have api as product enabled
+    Given I have api_as_product feature disabled
     When I follow "Overview"
     And I follow "Integration" within the main menu
     Then I should see menu items
@@ -54,23 +57,15 @@ Feature: API menu
     | Settings                  |
 
   Scenario: Integration sub menu structure for API as Product
-    Given the account has Service acting as Product
+    Given I have api_as_product feature enabled
     When I follow "Overview"
     And I follow "Integration" within the main menu
     Then I should see menu items
     | Configuration             |
     | Methods & Metrics         |
     | Mapping Rules             |
-    | Settings                  |
-
-  Scenario: Integration sub menu structure for API as Product without independent mapping rules
-    Given the account has Service acting as Product
-    And I have independent_mapping_rules feature disabled
-    When I follow "Overview"
-    And I follow "Integration" within the main menu
-    Then I should see menu items
-    | Configuration             |
-    | Methods & Metrics         |
+    | Policies                  |
+    | Backends                  |
     | Settings                  |
 
   Scenario: API menu structure with service plans enabled

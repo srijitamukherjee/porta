@@ -1,4 +1,4 @@
-require File.expand_path(File.dirname(__FILE__) + '/../test_helper')
+require 'test_helper'
 
 class PlanTest < ActiveSupport::TestCase
   fixtures :countries
@@ -22,6 +22,48 @@ class PlanTest < ActiveSupport::TestCase
   should_not allow_value(:zero).for(:cost_aggregation_rule)
   should_not allow_value('').for(:cost_aggregation_rule)
   should_not allow_value(nil).for(:cost_aggregation_rule)
+
+  def test_contracts_count_normal_behavior
+    account = FactoryBot.create(:simple_provider)
+    service = FactoryBot.create(:service, account: account)
+    plan = FactoryBot.create(:application_plan, service: service)
+
+    assert_equal 0, plan.reload.contracts_count
+    app = FactoryBot.create(:cinstance, service: service, plan: plan)
+    assert_equal 1, plan.reload.contracts_count
+
+    app.destroy!
+    assert_equal 0, plan.reload.contracts_count
+  end
+
+  def test_contracts_count_account_being_deleted
+    account = FactoryBot.create(:simple_provider)
+    service = FactoryBot.create(:service, account: account)
+    plan = FactoryBot.create(:application_plan, service: service)
+
+    assert_equal 0, plan.reload.contracts_count
+    app = FactoryBot.create(:cinstance, service: service, plan: plan)
+    assert_equal 1, plan.reload.contracts_count
+
+    account.schedule_for_deletion!
+    app.destroy!
+    assert_equal 1, plan.reload.contracts_count
+  end
+
+  def test_contracts_count_service_being_deleted
+    account = FactoryBot.create(:simple_provider)
+    service = FactoryBot.create(:service, account: account)
+    plan = FactoryBot.create(:application_plan, service: service, issuer: service)
+
+    assert_equal 0, plan.reload.contracts_count
+    app = FactoryBot.create(:cinstance, service: service, plan: plan)
+    assert_equal 1, plan.reload.contracts_count
+
+    service.stubs(last_accessible?: false)
+    service.mark_as_deleted!
+    app.destroy!
+    assert_equal 1, plan.reload.contracts_count
+  end
 
   def test_reset_contracts_counter
     assert FactoryBot.create(:simple_application_plan).reset_contracts_counter

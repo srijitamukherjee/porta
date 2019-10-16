@@ -13,6 +13,7 @@ class Contract < ApplicationRecord
   include States
   include Billing
   include Trial
+  include CounterCacheCallbacks
 
   include Finance::FixedFee
   include Finance::SetupFee
@@ -22,7 +23,7 @@ class Contract < ApplicationRecord
   after_destroy :destroy_customized_plan
   after_commit :notify_plan_changed
 
-  belongs_to :plan, counter_cache: true
+  belongs_to :plan
   validate   :correct_plan_subclass?
   # this breaks nested saving of records, when validating there is no user_account yet, its new record
   # validates_presence_of :user_account
@@ -63,22 +64,22 @@ class Contract < ApplicationRecord
   end
 
   # Return contracts bought by given account.
-  scope :bought_by, lambda { |account|
+  scope :bought_by, ->(account) {
     where({:user_account_id => account.id})
   }
 
   scope :with_account, -> { includes([:user_account])}
 
-  scope :by_type, lambda { |contract_type|
+  scope :by_type, ->(contract_type) {
     where({ :type => contract_type.to_s })
   }
 
   # SEARCH SCOPES
-  scope :by_plan_id, lambda { |plan_id|
+  scope :by_plan_id, ->(plan_id) {
     where(plan_id: plan_id.to_i)
   }
 
-  scope :by_name, lambda { |text|
+  scope :by_name, ->(text) {
     # replace start and end of string with % unless already has %
     pattern = text.sub(/(^[^%])/, '%\\1').sub( /([^%]$)/, '\\1%')
     collate = { oracle: 'GENERIC_M_CI', postgres: '"und-x-icu"', mysql: 'UTF8_GENERAL_CI' }.fetch(System::Database.adapter.to_sym)
@@ -86,7 +87,7 @@ class Contract < ApplicationRecord
   }
 
   scope :by_account, ->(account) { where.has { user_account_id == account } }
-  scope :by_account_query, lambda { |query| where( { :user_account_id => Account.buyers.search_ids(query) } ) }
+  scope :by_account_query, ->(query) { where( { :user_account_id => Account.buyers.search_ids(query) } ) }
 
   scope :have_paid_on, ->(paid_date) { where.has { (paid_until >= paid_date) | (variable_cost_paid_until >= paid_date) } }
 
@@ -246,6 +247,15 @@ class Contract < ApplicationRecord
 
   protected
 
+  def update_counter_cache?(association_name)
+    case association_name
+    when :plan
+      !provider_account&.scheduled_for_deletion? && !issuer&.deleted?
+    else
+      true
+    end
+  end
+
   def correct_plan_subclass?
     if plan && (not plan.is_a?(Plan))
       errors.add(:plan, 'wrong plan subclass')
@@ -290,6 +300,19 @@ class Contract < ApplicationRecord
   add_three_scale_method_tracer :change_plan_internal
 
   private
+
+  def reset_counter_cache_for
+    [:plan].freeze
+  end
+
+  def update_counter_cache?(association_name)
+    case association_name
+    when :plan
+      !provider_account&.scheduled_for_deletion? && !issuer&.deleted?
+    else
+      true
+    end
+  end
 
   def notify_plan_changed
     if previously_changed?(:plan_id) && @old_plan

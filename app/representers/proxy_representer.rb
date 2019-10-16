@@ -4,7 +4,7 @@ class ProxyRepresenter < ThreeScale::Representer
   property :service_id
   property :endpoint
   property :deployed_at
-  property :api_backend
+  property :api_backend, render_nil: true
   property :credentials_location
   property :auth_app_key
   property :auth_app_id
@@ -41,8 +41,11 @@ class ProxyRepresenter < ThreeScale::Representer
   # By sending the lock_version with the update call the record is updated only when matching that version.
   property :lock_version
 
-  property :oidc_issuer_endpoint, if: ->(*) {  oidc?   }
-  property :oidc_issuer_type, if: ->(*) {  oidc?   }
+  property :oidc_issuer_endpoint, if: ->(*) { oidc? }
+  property :oidc_issuer_type, if: ->(*) { oidc? }
+
+  property :jwt_claim_with_client_id, if: ->(*) { oidc? }
+  property :jwt_claim_with_client_id_type, if: ->(*) { oidc? }
 
   class JSON < ProxyRepresenter
     include Roar::JSON

@@ -98,16 +98,18 @@ Then /^I should see all keys of the application of (buyer "[^"]*")$/ do |buyer|
 end
 
 def limit_warning
-  find("#app-keys-limit-warning")
+  find("#app-keys-limit-warning", visible: :any)
 end
 
 Then /^I should see application keys limit reached error$/ do
+  wait_for_requests
   within '#application_keys' do
     limit_warning.should be_visible
   end
 end
 
 Then /^I should(?:n't| not) see application keys limit reached error$/ do
+  wait_for_requests
   within '#application_keys' do
     limit_warning.should_not be_visible
   end

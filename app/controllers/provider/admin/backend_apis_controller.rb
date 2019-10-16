@@ -15,9 +15,9 @@ class Provider::Admin::BackendApisController < Provider::Admin::BaseController
   def create
     @backend_api = current_account.backend_apis.build(create_params)
     if @backend_api.save
-      redirect_to provider_admin_backend_api_path(@backend_api), notice: 'Backend API created'
+      redirect_to provider_admin_backend_api_path(@backend_api), notice: 'Backend created'
     else
-      flash.now[:error] = 'Backend API could not be created'
+      flash.now[:error] = 'Backend could not be created'
       activate_menu :dashboard
       render :new
     end
@@ -29,18 +29,18 @@ class Provider::Admin::BackendApisController < Provider::Admin::BaseController
 
   def update
     if @backend_api.update_attributes(update_params)
-      redirect_to provider_admin_backend_api_path(@backend_api), notice: 'Backend API updated'
+      redirect_to provider_admin_backend_api_path(@backend_api), notice: 'Backend updated'
     else
-      flash.now[:error] = 'Backend API could not be updated'
+      flash.now[:error] = 'Backend could not be updated'
       render :edit
     end
   end
 
   def destroy
-    if @backend_api.services.empty? && @backend_api.destroy
-      redirect_to provider_admin_dashboard_path, notice: 'Backend API deleted'
+    if @backend_api.mark_as_deleted
+      redirect_to provider_admin_dashboard_path, notice: 'Backend will be deleted shortly.'
     else
-      flash[:error] = 'Backend API could not be deleted'
+      flash[:error] = @backend_api.errors.full_messages.to_sentence
       render :edit
     end
   end
@@ -51,7 +51,7 @@ class Provider::Admin::BackendApisController < Provider::Admin::BaseController
   private_constant :DEFAULT_PARAMS
 
   def find_backend_api
-    @backend_api = current_account.backend_apis.find(params[:id])
+    @backend_api = current_account.backend_apis.accessible.find(params[:id])
   end
 
   def create_params

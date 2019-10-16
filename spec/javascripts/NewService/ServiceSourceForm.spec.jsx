@@ -2,19 +2,17 @@
 
 import React from 'react'
 import { act } from 'react-dom/test-utils'
-import Enzyme, {mount, shallow} from 'enzyme'
-import Adapter from 'enzyme-adapter-react-16'
+import {mount, shallow} from 'enzyme'
 
 import {ServiceSourceForm} from 'NewService'
-
-Enzyme.configure({adapter: new Adapter()})
 
 const serviceDiscoveryAuthenticateUrl = 'my-url'
 const props = {
   isServiceDiscoveryUsable: true,
   serviceDiscoveryAuthenticateUrl,
   handleFormsVisibility: () => {},
-  loadingProjects: false
+  loadingProjects: false,
+  apiap: false
 }
 
 it('should render itself', () => {
@@ -67,4 +65,10 @@ it('should render a link to authenticate when Service Discovery is not usable', 
     wrapper.setProps({ isServiceDiscoveryUsable: true })
   })
   expect(wrapper.find(`a[href="${serviceDiscoveryAuthenticateUrl}"]`).exists()).toBe(false)
+})
+
+it('should render a text hint when APIAP is on', () => {
+  props.apiap = true
+  const wrapper = mount(<ServiceSourceForm {...props} />)
+  expect(wrapper.find('.inline-hints').text()).toEqual('Choosing this option will also create a Backend')
 })

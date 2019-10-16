@@ -24,7 +24,7 @@ Feature: Account service plans management
   Scenario: Link to service contracts on account page in enterprise
     Given I am logged in as provider "foo.example.com"
     When I am on the buyer account page for "bob"
-     And I follow "Portal" in the main menu
+     And I follow "Developer Portal" in the main menu
     Then I should see "Service Subscription"
 
   @javascript
@@ -39,14 +39,12 @@ Feature: Account service plans management
      And I should see "Fancy API"
 
     When I follow "Subscribe to Fancy API"
-     And I wait until all animations have finished
 
     Then I should see "New service subscription"
     #And I should see "Cheap one"
     #And I should see "Expensive one"
 
     When I press "Create subscription"
-     And I wait until all animations have finished
     Then I should see "Cheap one"
 
     When I follow "Change Fancy API subscription"
@@ -54,7 +52,6 @@ Feature: Account service plans management
 
     When I select "Expensive one" from "Plan"
      And I press "Change subscription" within fancybox
-     And I wait until all animations have finished
     Then I should see "Expensive one"
 
 

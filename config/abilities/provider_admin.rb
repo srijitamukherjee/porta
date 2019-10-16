@@ -72,12 +72,14 @@ Ability.define do |user|
     end
 
     can :create, Service if account.can_create_service?
+    can :edit, Service
     can :destroy, Service do |service|
       service.account_id == user.account_id && can?(:manage, :multiple_services) and not service.default_or_last?
     end
 
     if account.provider_can_use?(:api_as_product)
       can :manage, BackendApi
+      can :manage, BackendApiConfig
     end
 
     # TODO: there should be user.accessible_cinstances.where_values_hash, but that query is impossible

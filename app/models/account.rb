@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_dependency 'backend_client'
-
 class Account < ApplicationRecord
   # Hack to remove all the attributes with names matching the regex from @attributes
   # It is enough for rails not persisting them in actual columns.
@@ -58,8 +56,7 @@ class Account < ApplicationRecord
   include CreditCard
   include Gateway
   include States
-  require_dependency 'account/domains'
-  include Domains
+  include ProviderDomains
 
   #TODO: this needs testing?
   scope :providers, -> { where(provider: true) }
@@ -108,11 +105,13 @@ class Account < ApplicationRecord
 
   scope :free, ->(free_date) { where.has { not_exists Contract.have_paid_on(free_date).by_account(BabySqueel[:accounts].id).select(:id) } }
 
-  scope :lacks_cinstance_with_plan_system_name, lambda { |system_names|
+  scope :lacks_cinstance_with_plan_system_name, ->(system_names) {
     where.has do
       not_exists Cinstance.by_account(BabySqueel[:accounts].id).by_plan_system_name(system_names).select(:id)
     end
   }
+
+  alias deleted? scheduled_for_deletion?
 
   def destroy_features
     features.destroy_all
@@ -193,7 +192,7 @@ class Account < ApplicationRecord
   end
 
   def forum!
-    forum || fail(ActiveRecord::RecordNotFound, "buyer accounts can't have forum")
+    forum || raise(ActiveRecord::RecordNotFound, "buyer accounts can't have forum")
   end
 
   def build_forum(attributes = {})
@@ -208,7 +207,7 @@ class Account < ApplicationRecord
   # profile is using acts_as_audited and it will not work if :dependent => :destroy
   has_one :profile, dependent: :delete
   has_one :settings, dependent: :destroy, inverse_of: :account, autosave: true
-  lazy_initialization_for :profile, :settings
+  lazy_initialization_for :profile, :settings, if: :should_not_be_deleted?
   accepts_nested_attributes_for :profile
 
   belongs_to :country
@@ -283,11 +282,11 @@ class Account < ApplicationRecord
   end
 
   def self.master
-    find_by_master!(true)
+    find_by!(master: true)
   end
 
   def self.provider
-    find_by_provider!(true)
+    find_by!(provider: true)
   end
 
   def self.master?
@@ -304,9 +303,9 @@ class Account < ApplicationRecord
 
   def country=(country_name)
     self.country_id = if country_name.is_a? Country
-      country_name.id
+                        country_name.id
                       elsif country_name
-      Country.find_by_name(country_name).try!(:id)
+                        Country.find_by(name: country_name)&.id
                       end
   end
 
@@ -318,7 +317,7 @@ class Account < ApplicationRecord
   # database lookup if possible (uses cache), so it is super fast.
   def self.id_from_api_key(api_key)
     Rails.cache.fetch("account_ids/#{api_key}") do
-      Account.find_by_provider_key!(api_key).id
+      Account.find_by_provider_key!(api_key).id # rubocop:disable Rails/DynamicFindBy
     end
   end
 
@@ -362,13 +361,13 @@ class Account < ApplicationRecord
   # currency and further to DEFAULT_CURRENCY.
   #
   def currency
-    billing_strategy.try!(:currency) || country.try!(:currency) || DEFAULT_CURRENCY
+    billing_strategy&.currency || country&.currency || DEFAULT_CURRENCY
   end
 
   # Tax rate associated with this account. It is taken from it's country of
   # residence.
   def tax_rate
-    country && country.tax_rate || 0.0
+    country&.tax_rate || 0.0
   end
 
   # Return country name
@@ -458,7 +457,7 @@ class Account < ApplicationRecord
   end
 
   def backend_object
-    fail 'backend_object is only for provider accounts' unless provider?
+    raise 'backend_object is only for provider accounts' unless provider?
 
     @backend_object ||= BackendClient::Connection.new.provider(self)
   end
@@ -496,8 +495,10 @@ class Account < ApplicationRecord
         fields_to_xml(xml)
         extra_fields_to_xml(xml)
 
-        xml.monthly_billing_enabled settings.monthly_billing_enabled
-        xml.monthly_charging_enabled settings.monthly_charging_enabled
+        unless should_be_deleted?
+          xml.monthly_billing_enabled settings.monthly_billing_enabled
+          xml.monthly_charging_enabled settings.monthly_charging_enabled
+        end
 
         xml.credit_card_stored credit_card_stored?
 
@@ -509,9 +510,7 @@ class Account < ApplicationRecord
         bought_plans.to_xml(builder: xml, root: 'plans')
         users.to_xml(builder: xml, root: 'users')
 
-        if options[:with_apps]
-          bought_cinstances.to_xml(builder: xml, root: 'applications')
-        end
+        bought_cinstances.to_xml(builder: xml, root: 'applications') if options[:with_apps]
       end
     end
 
@@ -540,24 +539,23 @@ class Account < ApplicationRecord
   # Grabs the support_email if defined, otherwise falls back to the email of first admin. Dog.
   def support_email
     se = self[:support_email]
-    se.present? ? se : admins.first.try!(:email)
+    se.presence || admins.first&.email
   end
 
   def finance_support_email
-    fse = self[:finance_support_email]
-    if fse.present?
-      fse
-    else
-      support_email
-    end
+    self[:finance_support_email].presence || support_email
   end
 
   def provider_id_for_audits
     if buyer?
-      provider_account.try!(:provider_id_for_audits)
+      provider_account&.provider_id_for_audits
     else
       id
     end
+  end
+
+  def independent_mapping_rules_enabled?
+    provider_can_use?(:api_as_product) || provider_can_use?(:independent_mapping_rules)
   end
 
   private

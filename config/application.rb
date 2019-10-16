@@ -26,7 +26,7 @@ module System
   module AssociationExtension
     def self.included(base)
       base.define_singleton_method(:to_proc) do
-        lambda { |_| include base }
+        ->(_) { include base }
       end
     end
   end
@@ -184,7 +184,7 @@ module System
     config.three_scale.payments.enabled = false
     config.three_scale.active_merchant_mode ||= Rails.env.production? ? :production : :test
 
-    config.three_scale.rolling_updates.features = try_config_for(:rolling_updates)
+    config.three_scale.rolling_updates.features = try_config_for(:rolling_updates).deep_merge(try_config_for(:"extra-rolling_updates") || {})
 
     config.three_scale.service_discovery = ActiveSupport::OrderedOptions.new
     config.three_scale.service_discovery.enabled = false

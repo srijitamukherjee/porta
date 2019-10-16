@@ -208,7 +208,7 @@ without fake Core server your after commit callbacks will crash and you might ge
           resources :metrics, :except => [:show] do
             resources :children, :controller => 'metrics', :only => [:new, :create]
           end
-          resources :mapping_rules, except: %i[show]
+          resources :mapping_rules, except: %i[show], defaults: { owner_type: 'BackendApi' }
         end
       end
 
@@ -487,6 +487,8 @@ without fake Core server your after commit callbacks will crash and you might ge
       # called from heroku deploy hook after heroku proxy deploy script
       post 'heroku-proxy/deployed', to: 'heroku_proxy#deployed', as: :heroku_proxy_deployed
 
+      get 'objects/status' => 'objects#status', as: :objects_status, controller: :objects, defaults: { format: :json }
+
       namespace :personal, defaults: { format: :json } do
         resources :access_tokens, except: %i[new edit]
       end
@@ -521,6 +523,15 @@ without fake Core server your after commit callbacks will crash and you might ge
       resources :sso_tokens, only: :create do
         collection do
           post :provider_create, constraints: MasterDomainConstraint
+        end
+      end
+
+      resources :backend_apis, defaults: { format: :json } do
+        scope module: :backend_apis do
+          resources :metrics, except: %i[new edit] do
+            resources :methods, controller: 'metric_methods', except: %i[new edit]
+          end
+          resources :mapping_rules, except: %i[new edit]
         end
       end
 
@@ -661,6 +672,8 @@ without fake Core server your after commit callbacks will crash and you might ge
         end
 
         scope module: :services do # this api has a knack for inconsistency
+          resources :backend_apis, controller: :backend_api_configs, except: %i[new edit], defaults: { format: :json }
+
           resources :end_users, :only => [:show, :create, :destroy] do
             member do
               put :change_plan
@@ -767,6 +780,7 @@ without fake Core server your after commit callbacks will crash and you might ge
         resources :services, except: :index do
           member do
             get :settings
+            get :usage_rules
           end
           resource :support, :only => [:edit, :update]
           resource :content, :only => [:edit, :update]
@@ -824,6 +838,8 @@ without fake Core server your after commit callbacks will crash and you might ge
             end
           end
 
+          resources :backend_api_configs, except: :show
+
           resource :integration, :except => [ :create, :destroy ] do
             member do
               patch 'update_production'
@@ -834,7 +850,8 @@ without fake Core server your after commit callbacks will crash and you might ge
           end
           resources :proxy_logs, :only => [:index, :show ]
           resources :proxy_configs, only: %i(index show)
-          resources :proxy_rules, except: %i[show]
+          resources :proxy_rules, except: %i[show], defaults: { owner_type: 'Proxy' }
+          resource :policies, except: [:show, :destroy]
         end
 
         resources :alerts, :only => [:index, :destroy] do

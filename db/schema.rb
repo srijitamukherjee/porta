@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190805135829) do
+ActiveRecord::Schema.define(version: 20191007101321) do
 
   create_table "access_tokens", force: :cascade do |t|
     t.integer "owner_id",   limit: 8,                      null: false
@@ -228,21 +228,24 @@ ActiveRecord::Schema.define(version: 20190805135829) do
     t.integer  "tenant_id",      limit: 8
   end
 
+  add_index "backend_api_configs", ["backend_api_id", "service_id"], name: "index_backend_api_configs_on_backend_api_id_and_service_id", unique: true, using: :btree
   add_index "backend_api_configs", ["path", "service_id"], name: "index_backend_api_configs_on_path_and_service_id", unique: true, using: :btree
   add_index "backend_api_configs", ["service_id"], name: "index_backend_api_configs_on_service_id", using: :btree
 
   create_table "backend_apis", force: :cascade do |t|
-    t.string   "name",             limit: 511,      null: false
-    t.string   "system_name",      limit: 255,      null: false
+    t.string   "name",             limit: 511,                            null: false
+    t.string   "system_name",      limit: 255,                            null: false
     t.text     "description",      limit: 16777215
     t.string   "private_endpoint", limit: 255
     t.integer  "account_id",       limit: 8
-    t.datetime "created_at",                        null: false
-    t.datetime "updated_at",                        null: false
+    t.datetime "created_at",                                              null: false
+    t.datetime "updated_at",                                              null: false
     t.integer  "tenant_id",        limit: 8
+    t.string   "state",            limit: 255,      default: "published", null: false
   end
 
   add_index "backend_apis", ["account_id", "system_name"], name: "index_backend_apis_on_account_id_and_system_name", unique: true, using: :btree
+  add_index "backend_apis", ["state"], name: "index_backend_apis_on_state", using: :btree
 
   create_table "backend_events", id: false, force: :cascade do |t|
     t.integer  "id",         limit: 8,     null: false
@@ -583,6 +586,16 @@ ActiveRecord::Schema.define(version: 20190805135829) do
 
   add_index "forums", ["permalink"], name: "index_forums_on_site_id_and_permalink", using: :btree
   add_index "forums", ["position"], name: "index_forums_on_position_and_site_id", using: :btree
+
+  create_table "gateway_configurations", force: :cascade do |t|
+    t.text     "settings",   limit: 65535
+    t.integer  "proxy_id",   limit: 8
+    t.integer  "tenant_id",  limit: 8
+    t.datetime "created_at",               null: false
+    t.datetime "updated_at",               null: false
+  end
+
+  add_index "gateway_configurations", ["proxy_id"], name: "index_gateway_configurations_on_proxy_id", unique: true, using: :btree
 
   create_table "go_live_states", force: :cascade do |t|
     t.integer  "account_id", limit: 8
@@ -1122,6 +1135,14 @@ ActiveRecord::Schema.define(version: 20190805135829) do
   add_index "proxies", ["service_id"], name: "index_proxies_on_service_id", using: :btree
   add_index "proxies", ["staging_domain", "production_domain"], name: "index_proxies_on_staging_domain_and_production_domain", using: :btree
 
+  create_table "proxy_config_affecting_changes", force: :cascade do |t|
+    t.integer  "proxy_id",   limit: 4, null: false
+    t.datetime "created_at",           null: false
+    t.datetime "updated_at",           null: false
+  end
+
+  add_index "proxy_config_affecting_changes", ["proxy_id"], name: "index_proxy_config_affecting_changes_on_proxy_id", unique: true, using: :btree
+
   create_table "proxy_configs", force: :cascade do |t|
     t.integer  "proxy_id",    limit: 8,                    null: false
     t.integer  "user_id",     limit: 8
@@ -1134,6 +1155,7 @@ ActiveRecord::Schema.define(version: 20190805135829) do
     t.string   "hosts",       limit: 8192
   end
 
+  add_index "proxy_configs", ["proxy_id", "environment", "version"], name: "index_proxy_configs_on_proxy_id_and_environment_and_version", using: :btree
   add_index "proxy_configs", ["proxy_id"], name: "index_proxy_configs_on_proxy_id", using: :btree
   add_index "proxy_configs", ["user_id"], name: "index_proxy_configs_on_user_id", using: :btree
 

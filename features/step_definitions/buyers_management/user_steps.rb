@@ -19,13 +19,13 @@ Then /^I should see button to delete buyer (user "[^"]*")$/ do |user|
 end
 
 Then /^I should not see button to delete buyer (user "[^"]*")$/ do |user|
-  user_rm_form = "//form[@action='#{admin_buyers_account_user_path(user.account, user)}'][@method='post']//input[@name='_method'][@value='delete']"
-  assert has_no_xpath?(user_rm_form)
+  user_rm_form = "//form[@action='#{admin_buyers_account_user_path(user.account, user)}'][@method='post']//input[@name='_method'][@value='delete'][@type='hidden']"
+  assert has_no_xpath?(user_rm_form, visible: true)
 end
 
 Then /^I should see button to delete (user "[^"]*")$/ do |user|
-  user_rm_form = "//form[@action='#{provider_admin_account_user_path(user)}'][@method='post']//input[@name='_method'][@value='delete']"
-  assert has_xpath?(user_rm_form)
+  user_rm_form = "//form[@action='#{provider_admin_account_user_path(user)}'][@method='post']//input[@name='_method'][@value='delete'][@type='hidden']"
+  assert has_xpath?(user_rm_form, visible: :hidden)
 end
 
 Then /^I should not see button to delete (user "[^"]*")$/ do |user|
@@ -54,7 +54,8 @@ end
 When /^I navigate to the edit page of user "([^\"]*)" of buyer "([^\"]*)"$/ do |user, buyer|
   step 'I navigate to the accounts page'
   step %(I follow "#{buyer}")
-  step %(I follow "Users")
+  number_of_users = @provider.buyers.where(org_name: buyer).first!.users.count
+  step %(I follow "#{number_of_users} Users")
   step %(I follow "Edit" within the "#{user}" row)
 end
 

@@ -4,6 +4,8 @@ class Api::IntegrationsController < Api::BaseController
   before_action :find_service
   before_action :find_proxy
   before_action :authorize
+  before_action :hide_for_apiap, only: :edit
+  before_action :find_registry_policies, only: %i[edit update]
 
   activate_menu :serviceadmin, :integration, :configuration
   sublayout 'api/service'
@@ -13,11 +15,6 @@ class Api::IntegrationsController < Api::BaseController
   rescue_from ActiveRecord::StaleObjectError, with: :edit_stale
 
   def edit
-    begin
-      @registry_policies = Policies::PoliciesListService.call!(current_account, proxy: @proxy)
-    rescue StandardError => error
-      @error = error
-    end
     @latest_lua = current_account.proxy_logs.first
     @deploying =  ThreeScale::TimedValue.get(deploying_hosted_proxy_key)
     @ever_deployed_hosted = current_account.hosted_proxy_deployed_at.present?
@@ -34,13 +31,15 @@ class Api::IntegrationsController < Api::BaseController
       update_onboarding_mapping_bubble
       update_mapping_rules_position
 
+      return redirect_to admin_service_integration_path(@service) if apiap?
+
       if @proxy.send_api_test_request!
+        api_backend = @proxy.api_backend
         onboarding.bubble_update('api')
-        done_step(:api_sandbox_traffic) if ApiClassificationService.test(@proxy.api_backend).real_api?
+        done_step(:api_sandbox_traffic) if api_backend.present? && ApiClassificationService.test(api_backend).real_api?
         return redirect_to edit_path
       end
       render :edit
-
     else
       attrs = proxy_rules_attributes
       splitted = attrs.keys.group_by { |key| attrs[key]['_destroy'] == '1' }
@@ -133,6 +132,12 @@ class Api::IntegrationsController < Api::BaseController
 
   protected
 
+  def find_registry_policies
+    @registry_policies ||= Policies::PoliciesListService.call!(current_account, proxy: @proxy)
+  rescue StandardError => error
+    @error = error
+  end
+
   def edit_stale
     flash.now[:error] = flash_message(:stale_object)
 
@@ -203,6 +208,10 @@ class Api::IntegrationsController < Api::BaseController
     proxy.oidc? && ZyncWorker.config.message_bus
   end
 
+  def hide_for_apiap
+    raise ActiveRecord::RecordNotFound if apiap?
+  end
+
   def authorize
     authorize! :manage, :plans
     authorize! :edit, @service
@@ -222,6 +231,7 @@ class Api::IntegrationsController < Api::BaseController
   def proxy_params
     basic_fields = [
       :lock_version,
+
       :auth_app_id, :auth_app_key, :api_backend, :hostname_rewrite, :oauth_login_url,
       :secret_token, :credentials_location, :auth_user_key, :error_status_auth_failed,
       :error_headers_auth_failed, :error_auth_failed, :error_status_auth_missing,
@@ -241,6 +251,8 @@ class Api::IntegrationsController < Api::BaseController
     if provider_can_use?(:apicast_oidc)
       basic_fields << :oidc_issuer_endpoint
       basic_fields << :oidc_issuer_type
+      basic_fields << :jwt_claim_with_client_id
+      basic_fields << :jwt_claim_with_client_id_type
     end
 
     basic_fields << { backend_api_configs_attributes: %i[_destroy id path] } if provider_can_use?(:api_as_product)

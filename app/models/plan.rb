@@ -112,9 +112,9 @@ class Plan < ApplicationRecord
 
   scope :latest, -> { limit(5).order(created_at: :desc) }
 
-  scope :by_state, lambda { |state|  where({:state => state.to_s})}
+  scope :by_state, ->(state) {  where({:state => state.to_s})}
 
-  scope :by_type, lambda { |type| where({ :type => type.to_s })}
+  scope :by_type, ->(type) { where({ :type => type.to_s })}
 
   # Customzied plans
   scope :customized, -> { where("#{table_name}.original_id <> 0") }
@@ -184,8 +184,10 @@ class Plan < ApplicationRecord
   end
 
   def reset_contracts_counter
-    self.class.reset_counters(id, :contracts)
+    update_column(:contracts_count, contracts.count) if persisted?
   end
+  alias reset_counter_cache reset_contracts_counter
+
 
   def can_be_destroyed?
     return true if destroyed_by_association

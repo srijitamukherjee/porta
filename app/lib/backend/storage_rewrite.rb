@@ -9,7 +9,7 @@ module Backend
       progress_each = 100
       index = 0
 
-      progress = lambda do
+      progress = -> do
         index += 1
         break unless (index % progress_each) == 0
         percent = (index / total_count.to_f) * 100.0
@@ -38,7 +38,7 @@ module Backend
       end
 
       Metric.find_each do |metric|
-        metric.send(:sync_backend!)
+        metric.sync_backend!
         progress.call
       end
 
@@ -66,7 +66,7 @@ module Backend
       total_count = services.size + cinstances.size + metrics.size + usage_limits.size + bought_cinstances.size
 
       index = 0
-      progress = lambda do
+      progress = -> do
         percent = ((index + 1) / total_count.to_f) * 100.0
         yield percent if block_given?
         index += 1
@@ -80,7 +80,7 @@ module Backend
       end
 
       metrics.find_each do |metric|
-        metric.send(:sync_backend!)
+        metric.sync_backend!
         progress.call
       end
 
@@ -89,7 +89,7 @@ module Backend
         progress.call
       end
 
-      update_cinstance = lambda do |cinstance|
+      update_cinstance = ->(cinstance) do
         cinstance.send(:update_backend_application)
         cinstance.send(:update_backend_user_key_to_application_id_mapping)
         if cinstance.provider_account

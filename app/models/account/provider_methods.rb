@@ -18,7 +18,7 @@ module Account::ProviderMethods
     has_one :provider_constraints, foreign_key: 'provider_id'
 
     has_one :forum
-    lazy_initialization_for :forum, if: :provider?
+    lazy_initialization_for :forum, if: :initialize_forum?
 
     has_one  :web_hook, inverse_of: :account
     has_many :alerts
@@ -173,6 +173,10 @@ module Account::ProviderMethods
   # Only timezones with whole hour shift are allowed
   #
   ALLOWED_TIMEZONES = ActiveSupport::TimeZone.all.reject { |z| z.utc_offset % 3600 != 0 }.freeze
+
+  def initialize_forum?
+    provider? && should_not_be_deleted?
+  end
 
   # Returns all alerts for all the apps of this provider buyers minus his own with (master) 3scale
   #
@@ -334,7 +338,7 @@ module Account::ProviderMethods
       plan.create_contract_with!(self)
     end
 
-    services.create! name: "API"
+    ServiceCreator.new(service: services.build(name: 'API')).call(private_endpoint: BackendApi.default_api_backend)
   end
 
   def create_default_fields_definitions

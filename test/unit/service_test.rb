@@ -11,6 +11,13 @@ class ServiceTest < ActiveSupport::TestCase
     assert_not_nil service.proxy
   end
 
+  def test_create_with_default_private_endpoint
+    account = FactoryBot.build(:provider_account)
+    account.save!
+    service = account.default_service
+    assert_equal BackendApi.default_api_backend, service.api_backend
+  end
+
   def test_backend_version=
     service = FactoryBot.build_stubbed(:simple_service)
     service.backend_version = 'oauth'
@@ -316,7 +323,7 @@ class ServiceTest < ActiveSupport::TestCase
     service.account.settings.service_plans_ui_visible = true
 
     service.save!
-    
+
     service_plan = service.service_plans.first!
     assert_equal 'hidden', service_plan.state
   end
@@ -601,8 +608,9 @@ class ServiceTest < ActiveSupport::TestCase
   end
 
   test 'of_approved_account' do
-    account = FactoryBot.create(:simple_provider, state: 'suspended')
+    account = FactoryBot.create(:simple_provider)
     service = FactoryBot.create(:simple_service, account: account)
+    account.suspend!
     assert_not_includes Service.of_approved_accounts, service
   end
 

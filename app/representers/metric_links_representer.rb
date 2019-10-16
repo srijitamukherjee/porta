@@ -1,15 +1,16 @@
+# frozen_string_literal: true
+
 module MetricLinksRepresenter
   extend ActiveSupport::Concern
-
   included do
 
     link :metric do
       return unless metric
 
-      if metric.is_a_method?
-        admin_api_service_metric_method_url(metric.service, metric.parent, metric)
+      if metric.method_metric?
+        polymorphic_url([:admin, :api, metric.owner, metric.parent, :methods], id: metric.id)
       else
-        admin_api_service_metric_url(metric.service, metric)
+        polymorphic_url([:admin, :api, metric.owner, metric])
       end
     end
   end

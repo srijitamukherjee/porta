@@ -15,7 +15,6 @@ Then /^fields (.*) should be required$/ do |fields|
   end
 end
 
-
 Then /^I should see link to (.+)$/ do |page_name|
   path = path_to(page_name)
   assert page.all('a').any? { |node| matches_path?(node[:href], path) }
@@ -38,6 +37,14 @@ end
 Then /^I should be redirected to "([^\"]*)"$/ do |url|
   response.should redirect_to(url)
   follow_redirect!
+end
+
+Then(/^I should see within "([^"]*)" the following:$/) do |selector, table|
+  within selector do
+    table.rows.flatten.each do |item|
+      step %(I should see "#{item}")
+    end
+  end
 end
 
 # Then I should see "foo" and "bar"
@@ -182,7 +189,7 @@ end
 Then /^I should see the following definition list:$/ do |table|
   # Not quite sure why single #next is not enought, possibly because
   # the first next sibling is just a text node?
-  table.diff!(extract_table('dl', 'dt', lambda { |dt| [dt, dt.next.next] }))
+  table.diff!(extract_table('dl', 'dt', ->(dt) { [dt, dt.next.next] }))
 end
 
 Then /^I should not see "([^"]*)" column$/ do |text|
@@ -231,6 +238,7 @@ When /^(.*) within ([^:"]+)$/ do |lstep, scope|
 end
 
 [ 'the audience dashboard widget', 'the apis dashboard widget',
+  'the apis dashboard products tabs section', 'the apis dashboard backends tabs section',
   'the first api dashboard widget',
   'the main menu',
   'the subsubmenu','the user widget',
@@ -295,7 +303,7 @@ end
 toggled_input_selector = '[data-behavior="toggle-inputs"] legend'
 
 And(/^I toggle "([^"]*)"$/) do |name|
-  find(toggled_input_selector, text: name).click
+  find(toggled_input_selector, text: /#{name}/i).click
 end
 
 When(/^I toggle all inputs$/) do

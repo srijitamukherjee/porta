@@ -4,20 +4,18 @@ require 'test_helper'
 
 class Api::ProxyRulesControllerTest < ActionDispatch::IntegrationTest
   def setup
-    Logic::RollingUpdates.stubs(enabled?: true)
-    Account.any_instance.stubs(:provider_can_use?).returns(true)
     @provider = FactoryBot.create(:provider_account)
-    @service  = FactoryBot.create(:service, account: @provider)
     login_provider @provider
   end
 
-  class WithFeatureEnabled < Api::ProxyRulesControllerTest
+  class WhenIndependentMappingRulesIsEnabled < Api::ProxyRulesControllerTest
     def setup
       super
-      Account.any_instance.stubs(:provider_can_use?).with(:independent_mapping_rules).returns(true).at_least_once
+      Account.any_instance.stubs(:independent_mapping_rules_enabled?).returns(true)
+      @service = FactoryBot.create(:service, account: @provider)
     end
 
-    test 'index page list all proxy rules' do
+    test '#index page list all proxy rules' do
       proxy_rules = FactoryBot.create_list(:proxy_rule, 2, proxy: @service.proxy)
 
       get admin_service_proxy_rules_path(@service)
@@ -29,6 +27,37 @@ class Api::ProxyRulesControllerTest < ActionDispatch::IntegrationTest
         patterns.include?(pattern)
       end
     end
+
+    test '#index page should not return the Redirect header when not using proxy pro' do
+      Service.any_instance.stubs(:using_proxy_pro?).returns(false)
+      proxy_rules = FactoryBot.create(:proxy_rule, proxy: @service.proxy)
+
+      get admin_service_proxy_rules_path(@service)
+      refute_match /Redirect/, response.body
+    end
+
+    test '#index page should return the Redirect header when using proxy pro' do
+      Service.any_instance.stubs(:using_proxy_pro?).returns(true)
+      proxy_rules = FactoryBot.create(:proxy_rule, proxy: @service.proxy)
+
+      get admin_service_proxy_rules_path(@service)
+      assert_match /Redirect/, response.body
+    end
+
+    test '#new should not return the Redirect Url field when not using proxy pro' do
+      Service.any_instance.stubs(:using_proxy_pro?).returns(false)
+
+      get new_admin_service_proxy_rule_path(@service)
+      assert_select '#proxy_rule_redirect_url', false
+    end
+
+    test '#new should return the Redirect Url field when using proxy pro' do
+      Service.any_instance.stubs(:using_proxy_pro?).returns(true)
+
+      get new_admin_service_proxy_rule_path(@service)
+      assert_select '#proxy_rule_redirect_url'
+    end
+
 
     test '#create persists a new proxy rule' do
       proxy_rule_params = FactoryBot.attributes_for(:proxy_rule, proxy: @service.proxy, metric_id: @service.metrics.last.id)
@@ -61,22 +90,23 @@ class Api::ProxyRulesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  class WithFeatureDisabled < Api::ProxyRulesControllerTest
+  class WhenIndependentMappingRulesIsDisabled < Api::ProxyRulesControllerTest
     def setup
       super
-      Account.any_instance.stubs(:provider_can_use?).with(:independent_mapping_rules).returns(false).at_least_once
+      Account.any_instance.stubs(:independent_mapping_rules_enabled?).returns(false)
+      @service = FactoryBot.create(:service, account: @provider)
     end
 
     test 'cannot access index page' do
       get admin_service_proxy_rules_path(@service)
 
-      assert_response :not_found
+      assert_response :forbidden
     end
 
     test 'cannot access new page' do
       get new_admin_service_proxy_rule_path(@service)
 
-      assert_response :not_found
+      assert_response :forbidden
     end
 
     test 'cannot access edit page' do
@@ -84,13 +114,13 @@ class Api::ProxyRulesControllerTest < ActionDispatch::IntegrationTest
 
       get edit_admin_service_proxy_rule_path(@service, proxy_rule)
 
-      assert_response :not_found
+      assert_response :forbidden
     end
 
     test 'cannot create a proxy rule' do
       post admin_service_proxy_rules_path(@service), proxy_rule: FactoryBot.attributes_for(:proxy_rule, proxy: @service.proxy)
 
-      assert_response :not_found
+      assert_response :forbidden
     end
 
     test 'cannot update a proxy rule' do
@@ -98,7 +128,7 @@ class Api::ProxyRulesControllerTest < ActionDispatch::IntegrationTest
 
       patch admin_service_proxy_rule_path(@service, proxy_rule), proxy_rule: { pattern: '/testing' }
 
-      assert_response :not_found
+      assert_response :forbidden
     end
 
     test 'cannot delete a proxy rule' do
@@ -106,7 +136,7 @@ class Api::ProxyRulesControllerTest < ActionDispatch::IntegrationTest
 
       delete admin_service_proxy_rule_path(@service, proxy_rule)
 
-      assert_response :not_found
+      assert_response :forbidden
     end
   end
 end

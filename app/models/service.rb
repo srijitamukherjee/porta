@@ -100,7 +100,7 @@ class Service < ApplicationRecord
   scope :accessible, -> { where.not(state: DELETE_STATE) }
   scope :deleted, -> { where(state: DELETE_STATE) }
   scope :of_approved_accounts, -> { joins(:account).merge(Account.approved) }
-  scope(:permitted_for_user, lambda do |user|
+  scope :permitted_for_user, ->(user) do
     # TODO: this is probably wrong...
     # how come if it does not have access_to_all_services but it can not use service_permissions,
     # then we allow them all?!!
@@ -110,7 +110,7 @@ class Service < ApplicationRecord
     else
       all
     end
-  end)
+  end
 
   validates :credit_card_support_email, format: { with: /.+@.+\..+/, allow_blank: true }
 
@@ -124,6 +124,8 @@ class Service < ApplicationRecord
   validates :infobar, :terms, :notification_settings, :oneline_description, :description,
             :txt_api, :txt_support, :txt_features,
             length: { maximum: 65535 }
+
+  accepts_nested_attributes_for :proxy
 
   class DeploymentOption
     PLUGINS = %i(ruby java python nodejs php rest csharp).freeze
@@ -466,7 +468,7 @@ class Service < ApplicationRecord
     system_name.to_s.parameterize.tr('_','-')
   end
 
-  APPLY_I18N = lambda do |args|
+  APPLY_I18N = ->(args) do
     args.map do |opt|
       [
         I18n.t(opt, scope: :deployment_options, raise: ActionView::Base.raise_on_missing_translations),
@@ -511,6 +513,14 @@ class Service < ApplicationRecord
     proxy&.oidc_configuration || OIDCConfiguration.new
   end
 
+  def can_use_policies?
+    proxy.apicast_configuration_driven && !proxy.service_mesh_integration?
+  end
+
+  def can_use_backends?
+    proxy.apicast_configuration_driven && !proxy.service_mesh_integration?
+  end
+
   private
 
   def archive_as_deleted
@@ -541,7 +551,8 @@ class Service < ApplicationRecord
   end
 
   def default_service_plan_state
-    return unless account.try(:provider_can_use?, :published_service_plan_signup)
+    return unless account && account.provider_can_use?(:published_service_plan_signup)
+    return if account.should_be_deleted?
     account.settings.service_plans_ui_visible? ? 'hidden'.freeze : 'published'.freeze
   end
 
@@ -610,7 +621,7 @@ class Service < ApplicationRecord
   delegate :oauth?, to: :authentication_scheme?
 
   delegate :authentication_method, to: :proxy, prefix: true, allow_nil: true
-  delegate :oidc?, to: :proxy, allow_nil: true
+  delegate :oidc?, :pending_affecting_changes?, to: :proxy, allow_nil: true
 
   def authentication_scheme?
     backend_version.to_s.inquiry
