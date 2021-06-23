@@ -36,14 +36,19 @@ Before '@chrome' do
   Capybara.current_driver = :chrome
 end
 
+Before '@firefox' do
+  Capybara.current_driver = :firefox
+end
+
+Around '@security' do |scenario, block|
+  with_forgery_protection(&block)
+end
+
 # monkeypatch to fix
 # not opened for reading (IOError)
 # /cucumber-1.3.20/lib/cucumber/formatter/interceptor.rb:33:in `each'
 # /cucumber-1.3.20/lib/cucumber/formatter/interceptor.rb:33:in `collect'
 # /cucumber-1.3.20/lib/cucumber/formatter/interceptor.rb:33:in `method_missing'
-# /airbrake-4.3.0/lib/airbrake/utils/params_cleaner.rb:129:in `clean_unserializable_data'
-# /airbrake-4.3.0/lib/airbrake/utils/params_cleaner.rb:122:in `block in clean_unserializable_data'
-# /airbrake-4.3.0/lib/airbrake/utils/params_cleaner.rb:121:in `each'
 require 'cucumber/formatter/interceptor'
 class Cucumber::Formatter::Interceptor::Pipe
   def is_a?(klass)
@@ -59,7 +64,17 @@ Capybara.register_driver :headless_firefox do |app|
   options = Selenium::WebDriver::Firefox::Options.new
 
   options.add_argument('-headless')
-  options.add_argument('--window-size=1280,1024')
+  options.add_argument('--window-size=1280,2048')
+
+  driver = Capybara::Selenium::Driver.new(app, browser: :firefox, options: options)
+
+  driver
+end
+
+Capybara.register_driver :firefox do |app|
+  options = Selenium::WebDriver::Firefox::Options.new
+
+  options.add_argument('--window-size=1280,2048')
 
   driver = Capybara::Selenium::Driver.new(app, browser: :firefox, options: options)
 
@@ -69,6 +84,7 @@ end
 Capybara.register_driver :chrome do |app|
   options = Selenium::WebDriver::Chrome::Options.new
   options.add_argument('--auto-open-devtools-for-tabs')
+  options.add_argument('--window-size=1280,2048')
   Capybara::Selenium::Driver.new(app, browser: :chrome, options: options)
 end
 
@@ -78,14 +94,19 @@ Capybara.register_driver :headless_chrome do |app|
   options.add_argument('--headless')
   options.add_argument('--no-sandbox')
   options.add_argument('--disable-popup-blocking')
-  options.add_argument('--window-size=1280,1024')
+  options.add_argument('--window-size=1280,2048')
 
   options.add_preference(:browser, set_download_behavior: { behavior: 'allow' })
+  options.add_option(:w3c, false)
+  options.add_option(:perfLoggingPrefs, {enableNetwork: true})
+  caps = Selenium::WebDriver::Remote::Capabilities.chrome(
+    loggingPrefs: {performance: 'ALL', browser: 'ALL'}
+  )
 
   client = Selenium::WebDriver::Remote::Http::Default.new
-  client.timeout = 120 # default 60
+  client.read_timeout = client.open_timeout = 120 # default 60
 
-  driver = Capybara::Selenium::Driver.new(app, browser: :chrome, options: options, http_client: client)
+  driver = Capybara::Selenium::Driver.new(app, browser: :chrome, options: options, http_client: client, desired_capabilities: caps)
 
   driver
 end

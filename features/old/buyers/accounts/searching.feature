@@ -1,29 +1,28 @@
-@search @no-txn
+@search
 Feature: Searching buyer accounts
   In order to find a buyer account I'm looking for
   As a provider
   I want to have a full-text search at my disposal
 
   Background:
-    Given a provider "foo.example.com"
-    Given a default account plan "Default" of provider "foo.example.com"
-    And a account plan "Awesome" of provider "foo.example.com"
-    And a account plan "Tricky" of provider "foo.example.com"
+    Given a provider "foo.3scale.localhost"
+    Given a default account plan "Default" of provider "foo.3scale.localhost"
+    And a account plan "Awesome" of provider "foo.3scale.localhost"
+    And a account plan "Tricky" of provider "foo.3scale.localhost"
     Given I have following countries:
       | Code | Name           |
       | IT   | Italy          |
       | UK   | United Kingdom |
-    And provider "foo.example.com" has multiple applications enabled
-    And provider "foo.example.com" has the following buyers:
+    And provider "foo.3scale.localhost" has multiple applications enabled
+    And provider "foo.3scale.localhost" has the following buyers:
       | Name          | State    | Plan    | Country |
       | alice         | approved | Default |         |
       | bob           | approved | Awesome | United Kingdom |
       | bad buyer     | rejected | Default |         |
       | pending buyer | pending  | Tricky  | Italy   |
-    And the Sphinx indexes are updated
 
-     And current domain is the admin domain of provider "foo.example.com"
-     When I log in as provider "foo.example.com"
+     And current domain is the admin domain of provider "foo.3scale.localhost"
+     When I log in as provider "foo.3scale.localhost"
 
 
   Scenario: Search
@@ -120,7 +119,6 @@ Feature: Searching buyer accounts
 
   Scenario: Search by user's name
     Given an user of account "bob" with first name "Eric" and last name "Cartman"
-    And the Sphinx indexes are updated
 
     When I go to the buyer accounts page
     And I search for:
@@ -139,7 +137,6 @@ Feature: Searching buyer accounts
 
   Scenario: Search by user's username
     Given an user "awesomo" of account "bob"
-    And the Sphinx indexes are updated
 
     When I go to the buyer accounts page
     When I search for:
@@ -153,7 +150,6 @@ Feature: Searching buyer accounts
 
   Scenario: Recently created account is searchable
     When I create new buyer account "Bob's Web Widgets"
-     And the Sphinx indexes are updated
 
     And I go to the buyer accounts page
     And I search for:
@@ -165,16 +161,15 @@ Feature: Searching buyer accounts
 
   @security
   Scenario: Does not list buyers of other providers
-    Given a provider "bar.example.com"
-    And provider "bar.example.com" has multiple applications enabled
-    And a buyer "claire" signed up to provider "bar.example.com"
+    Given a provider "bar.3scale.localhost"
+    And provider "bar.3scale.localhost" has multiple applications enabled
+    And a buyer "claire" signed up to provider "bar.3scale.localhost"
 
     When I go to the buyer accounts page
     Then I should not see "claire" in the buyer accounts table
 
   Scenario: Does not list deleted accounts
     Given account "bob" is deleted
-    And the Sphinx indexes are updated
 
     When I go to the buyer accounts page
     Then I should not see "bob" in the buyer accounts table
@@ -187,8 +182,7 @@ Feature: Searching buyer accounts
    Then I should see 1 buyers in the buyer accounts table
 
   Scenario: Lists 10 accounts per page
-    Given provider "foo.example.com" has 12 buyers
-    And the Sphinx indexes are updated
+    Given provider "foo.3scale.localhost" has 12 buyers
 
     When I go to the buyer accounts page with 10 records per page
     Then I should see only 10 buyers in the buyer accounts table

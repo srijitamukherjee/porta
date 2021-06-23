@@ -14,7 +14,7 @@ class PaymentGatewayTest < ActiveSupport::TestCase
     setup { PaymentGateway.stubs(:bogus_enabled?).returns(false) }
 
     should 'contain only supported gateways' do
-      assert_equal [:adyen12, :authorize_net, :braintree_blue, :ogone, :stripe], PaymentGateway.all.map(&:type).sort
+      assert_equal %i[authorize_net braintree_blue ogone stripe], PaymentGateway.all.map(&:type).sort
     end
 
     should 'include bogus when enabled' do
@@ -40,5 +40,16 @@ class PaymentGatewayTest < ActiveSupport::TestCase
     PaymentGateway.types.each do |type|
       assert_not_nil PaymentGateway.find(type)
     end
+  end
+
+  test '.implementation for stripe with and without SCA' do
+    assert_equal ActiveMerchant::Billing::StripeGateway,               PaymentGateway.implementation(:stripe)
+    assert_equal ActiveMerchant::Billing::StripePaymentIntentsGateway, PaymentGateway.implementation(:stripe, sca: true)
+  end
+
+  test 'non_boolean_fields' do
+    payment_gateway = PaymentGateway.new(:feature, name: 'Name of the feature', opt_in: 'Opt in', boolean: %i[opt_in])
+    assert_equal %i[opt_in], payment_gateway.boolean_field_keys
+    assert_equal({name: 'Name of the feature'}, payment_gateway.non_boolean_fields)
   end
 end

@@ -1,6 +1,10 @@
+# frozen_string_literal: true
+
 class Admin::Api::ApiDocsServicesController < Admin::Api::BaseController
   before_action :deny_on_premises_for_master
-  before_action :find_api_docs_service, only: [:update, :destroy]
+  before_action :authorize_api_docs
+  before_action :find_api_docs_service, only: %i[show update destroy]
+  before_action :new_service_id_permitted, only: %i[create update]
 
   wrap_parameters ::ApiDocs::Service, name: :api_docs_service, include: ::ApiDocs::Service.attribute_names
 
@@ -28,7 +32,7 @@ class Admin::Api::ApiDocsServicesController < Admin::Api::BaseController
   ##~ op.parameters.add @parameter_access_token
   #
   def index
-    @api_docs_services = current_account.api_docs_services.all
+    @api_docs_services = api_docs_services.all
     respond_with(@api_docs_services)
   end
 
@@ -57,6 +61,25 @@ class Admin::Api::ApiDocsServicesController < Admin::Api::BaseController
   #
   def create
     @api_docs_service = current_account.api_docs_services.create(api_docs_params(:system_name), without_protection: true)
+    respond_with(@api_docs_service)
+  end
+
+  # swagger
+  ##~ sapi = source2swagger.namespace("Account Management API")
+  ##~ e = sapi.apis.add
+  ##~ e.path = "/admin/api/active_docs/{id}.json"
+  ##~ e.responseClass = "active_doc"
+  #
+  ##~ op            = e.operations.add
+  ##~ op.httpMethod = "GET"
+  ##~ op.summary    = "ActiveDocs Spec Read"
+  ##~ op.description = "Returns the ActiveDocs spec by ID"
+  ##~ op.group = "active_docs"
+  #
+  ##~ op.parameters.add @parameter_access_token
+  ##~ op.parameters.add @parameter_active_doc_id_by_id
+  #
+  def show
     respond_with(@api_docs_service)
   end
 
@@ -113,8 +136,22 @@ class Admin::Api::ApiDocsServicesController < Admin::Api::BaseController
     params.require(:api_docs_service).permit(*permit_params)
   end
 
-  def find_api_docs_service
-    @api_docs_service = current_account.api_docs_services.find(params[:id])
+  def api_docs_services
+    current_account.api_docs_services.accessible.permitted_for(current_user)
   end
 
+  def find_api_docs_service
+    @api_docs_service = api_docs_services.find(params[:id])
+  end
+
+  def new_service_id_permitted
+    service_id = api_docs_params[:service_id]
+    service_id.blank? || current_user.blank? || current_user.accessible_services.find(service_id)
+  rescue ActiveRecord::RecordNotFound
+    render_error('Service not found', status: :unprocessable_entity)
+  end
+
+  def authorize_api_docs
+    authorize! :manage, :plans if current_user
+  end
 end

@@ -50,9 +50,6 @@ module DeveloperPortal
       # HACK: handles concurrency issues - it may happen that
       # @user.valid? but @user.save! fails because the same user was
       # already inserted before (double-click on signup button)
-      #
-      # https://3scale.airbrake.io/errors/25132810
-      #
 
       if Rails.env.development? || Rails.env.test?
         raise
@@ -118,6 +115,7 @@ module DeveloperPortal
       # :plans is kept for legacy reasons - can be removed one made sure
       # that noone is using it
       plan_ids = Array(params[:plan_ids].presence || params[:plans])
+      plan_ids.reject!(&:blank?)
 
       @plans = @provider.provided_plans.published.find(plan_ids)
     end

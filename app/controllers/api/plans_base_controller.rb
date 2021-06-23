@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
+# frozen_string_literal: true
+
 class Api::PlansBaseController < Api::BaseController
   include ThreeScale::Search::Helpers
 
   before_action :deny_on_premises_for_master
-  before_action :authorize_plans
-
-  before_action :find_plan, :only => [:show, :edit, :update, :destroy, :copy, :masterize]
-  before_action :find_plans, :only => [:index]
-
-  before_action :check_plan_can_be_deleted, :only => [:destroy]
+  before_action :authorize_section
+  before_action :authorize_action, only: %i[new create destroy]
+  before_action :find_plan, except: %i[index new create]
+  before_action :find_service
+  before_action :find_plans, only: :index
+  before_action :check_plan_can_be_deleted, only: :destroy
 
   activate_menu :serviceadmin
 
@@ -18,16 +20,17 @@ class Api::PlansBaseController < Api::BaseController
   # have different controllers
   protected
 
-  def authorize_plans
-    authorize! :admin, :plans
-  end
-
-  def authorize_manage_plans
+  def authorize_section
     authorize! :manage, :plans
   end
 
+  def authorize_action
+    authorize! :create, :plans
+  end
+
   def resource(id = params[:id])
-    collection.readonly(false).find_by_id(id)
+    return unless id.present?
+    collection.readonly(false).find(id)
   end
 
   def collection
@@ -39,11 +42,21 @@ class Api::PlansBaseController < Api::BaseController
   end
 
   def find_plans
+    search = ThreeScale::Search.new(params[:search] || params)
     @plans = collection.order_by(params[:sort], params[:direction])
+                       .scope_search(search)
+    @page_plans = @plans.paginate(pagination_params)
   end
 
   def find_issuer
     @issuer = resource.issuer
+  end
+
+  def find_service
+    service_id = params[:service_id].presence || (@plan.issuer_id if @plan&.issuer_type == 'Service')
+    return unless service_id
+    @service = current_user.accessible_services.find(service_id)
+    authorize! :show, @service
   end
 
   private
@@ -89,11 +102,19 @@ class Api::PlansBaseController < Api::BaseController
   def destroy
     @plan.destroy
 
-    if block_given?
-      yield
-    else
+    return yield if block_given?
+
+    unless @plan.type == 'ApplicationPlan'
+      # Only Application plans are implemented in React right now
+      ThreeScale::Deprecation.warn "Plans are being migrated to React and this will no longer be used"
+
       flash[:notice] = 'The plan was deleted'
-      redirect_to plans_index_path
+      return redirect_to plans_index_path
+    end
+
+    json = { notice: 'The plan was deleted', id: @plan.id }
+    respond_to do |format|
+      format.json { render json: json, status: :ok }
     end
   end
 
@@ -103,16 +124,14 @@ class Api::PlansBaseController < Api::BaseController
 
   protected
 
-  def generic_masterize_plan(issuer, assoc)
-    masterize_plan do
-      if @plan.nil? || issuer.send(assoc) == @plan
-        issuer.send("#{assoc}=", nil)
-      else
-        issuer.send("#{assoc}=", @plan)
-      end
+  def assign_plan!(issuer, assoc)
+    plan = (!@plan || issuer.send(assoc) == @plan) ? nil : @plan
+    issuer.send("#{assoc}=", plan)
+    issuer.save!
+  end
 
-      issuer.save!
-    end
+  def generic_masterize_plan(issuer, assoc)
+    masterize_plan { assign_plan!(issuer, assoc) }
   end
 
   # this is supposed to be called via ajax and we need only to flash stuff

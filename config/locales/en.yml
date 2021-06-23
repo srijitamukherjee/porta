@@ -1,11 +1,13 @@
 en:
+  # start documentation links
   docs:
     base_url: 'https://access.redhat.com/documentation/en-us/%{major_and_minor_version_path}/html'
-    hero_api_portal: '%{docs_base_url}-single/product/index#hero-api-portal'
+    hero_api_portal: '%{docs_base_url}/creating_the_developer_portal/hero-api-portal'
     developer_portal:
       email_configuration: '%{docs_base_url}/creating-developer-portal/email-configuration'
-      liquid_reference: '%{docs_base_url}/liquid-reference'
+      liquid_reference: '%{docs_base_url}/liquid_reference/index'
     terminology: '%{docs_base_url}/terminology'
+  # end documentation links
   api_integrations_controller:
     promote_to_production_success: 'Staging configuration promoted to production'
     promote_to_production_error: "Couldn't promote Staging configuration to production"
@@ -13,8 +15,6 @@ en:
     update_production_success: 'Proxy settings deployed'
     update_error: "Couldn't update the Staging Configuration"
     update_success: '%{environment} Configuration Updated'
-    async_update_success: 'Staging Configuration Updated'
-    async_update_error: "Couldn't update the Staging Configuration"
     proxy_pro_update_sucess: 'Proxy settings saved.'
     stale_object: 'Someone else edited the Staging Configuration'
     apicast_version_reverted: 'The APIcast version for this service was successfully reverted to the old APIcast.'
@@ -22,7 +22,6 @@ en:
     apicast_version_not_reverted: 'The APIcast version for this service could not be reverted'
     apicast_version_not_upgraded: 'The APIcast version for this service could not be upgraded'
     oidc_not_available_on_old_apicast: 'OpenID Connect is not supported for the old APIcast. Pick a different authentication option before reverting back.'
-    edit_deployment_configuration: 'edit %{deployment} configuration'
   logos_controller:
     update_success: 'The logo was successfully uploaded.'
     destroy_success: 'The logo was successfully deleted.'
@@ -122,17 +121,33 @@ en:
       base:
         index:
           update_link_text: "Learn how to upgrade to Swagger 2"
+          # start documentation links
           update_link: "%{docs_base_url}/api-documentation/activedocs-migrate"
-
+          # end documentation links
   admin_sections:
-    partners: Accounts -- Applications
-    monitoring: Analytics
-    portal: Developer Portal
-    finance: Billing
-    settings: Settings
+    partners: 'Create, read, update and delete:<br/>
+      - developer <strong>accounts</strong><br/>
+      - <strong>applications</strong> of <em>selected API products</em>'
+    monitoring: 'Access & query <strong>analytics</strong> of:<br/>
+      - all API backends<br/>
+      - <em>selected API products</em>'
+    portal: 'Create, read, update, and delete content & code of the <strong>developer portal</strong>'
+    finance: 'Setup and manage <strong>customer billing</strong>'
+    settings: 'Update <strong>settings pages</strong>'
     services: Selected APIs
-    plans: Integration & Application Plans
-    policy_registry: Policy Registry
+    plans: 'Create, read, update and delete:<br/>
+      - <strong>attribues, metrics, methods, and mapping rules of all existing API backends</strong><br/>
+      - <strong>attributes, application plans, active docs, and integration</strong> of <em>selected API products</em>'
+    policy_registry: 'Create, read, update and delete:<br/>
+      - the APIcast <strong>policy chain and its policies</strong>'
+    permission_groups_summary:
+      portal: 'Developer Portal'
+      finance: 'Customer Billing'
+      settings: 'Settings pages'
+      partners: 'Developer accounts, Applications'
+      monitoring: 'Analytics'
+      plans: 'API backends, API products'
+      policy_registry: 'Policies'
 
   go_live_states:
     api_sandbox_traffic: "Done: Add your API endpoint and hit save & test"
@@ -310,13 +325,6 @@ en:
         with multiple tiered pricing plans, fixed and variable billing
         and automated invoicing.</p>
 
-    end_users:
-      name: User Plans
-      description_html: |
-        <p>The <b>user plans</b> module allows you to rate limit individual end
-        user use of your API independently of the applications they are
-        using. This feature is particularly useful for mobile applications. </p>
-
     groups:
       name: Groups
       description_html: |
@@ -355,9 +363,19 @@ en:
         has_password: 'User already has a password. Use it to change the password.'
 
     admin:
+      account:
+        users:
+          form:
+            submit_button_label: 'Update User'
+      accounts:
+        form:
+          submit_button_label: 'Update Account'
+          submit_button_next_step_label: 'Save and continue with payment details'
+
       authentication_providers:
         form:
           automatically_approve_accounts_hint_html: "<br /> Even if the <a href=%{link}>account approval settings</a> say otherwise"
+          submit_button_label: 'Create Authentication provider'
       messages:
         no_metrics: "You have no metrics"
         no_methods: "You have no methods"
@@ -383,6 +401,12 @@ en:
             no_notification_preferences_html: |
               You don't have access to any notifications on the %{account_name} account.
               Please contact <a href="mailto:%{email}">%{username}</a> to request access.
+          form:
+            submit_button_label: 'Update Notification Preferences'
+        personal_details:
+          edit:
+            form:
+              submit_button_label: 'Update Details'
 
       dashboards:
         show:
@@ -394,6 +418,10 @@ en:
           no_messages_4: "Blue skies ahead…"
           no_messages_5: "Inbox Zero"
           no_messages_6: "The sound of silence"
+      webhooks:
+        edit:
+          form:
+            submit_button_label: 'Update webhooks settings'
 
   buyers:
     accounts:
@@ -471,100 +499,18 @@ en:
           the OAuth authentication mode. You can change the authentication mode
           in the %{link_to_settings_tab}.
       proxy:
-        production:
-          title: "Production:"
-          self_managed:
-            title: "Self-managed Gateway"
-            description_html: |
-              To deploy an on-premises API gateway, add the Public Base URL
-              of your API, download the Nginx Config files and install them on your servers.
-          hosted:
-            title: "APIcast Cloud Gateway"
-            description: |
-              The APIcast production environment has the same configuration as the staging environment.
-              The public endpoint is different and it runs in a production environment
-          apicast:
-            title: "APIcast"
-            description_html: |
-              The APIcast production environment has the same configuration as the staging environment.
-              The public endpoint is different.
-        feedback:
-          api_test_path_blank: "The API test GET request has been left blank. You should set it before checking the connections between client, gateway & API."
-          api_test_success_nil: "Hit the test button to check the connections between client, gateway & API."
-          api_test_success_true_html: 'Connection between client, gateway & API is working correctly as <a href="%{url}">reflected in the analytics section</a>.'
-          api_test_success_false: "Something is not quite ok. Is your private API host reachable from the API gateway?"
-          api_test_form_error: "There seems to be an error in your Staging Configuration. Please review, fix and re-submit."
-
-        howto_hosted_html: |
-          Configure your API gateway in the staging environment. Once
-          your staging environment is green you can deploy the gateway
-          to the 3scale production environment.
-
-        howto_self_managed_html: |
-          Configure your API gateway in the staging environment. At any moment,
-          you can download the nginx config files to deploy your on-premises
-          API gateway to a suitable production environment.
-
-        howto_oauth_html: |
-          Configure your API gateway and run it on-premises. Please note that this is currently only possible for the Authorization Code flow.
-          For other flows, checkout our repository of nginx config file templates in <a href='https://github.com/3scale/nginx-oauth-templates'>github</a>. <b>Our staging environment currently doesn't support oauth.</b>
-
-        api_endpoint_help_html: |
-          <h4>Private Base URL</h4> <p>When you use the API gateway solution
-          your API Base URL becomes private and should only be called by the
-          gateway and not by developers directly.</p>
-
-        proxy_endpoint_help_html: |
-          <h4>Public Base URL</h4> <p>The Public Base URL is the url through which
-          developers connect to your API. Use this staging environment for testing
-          purposes only.</p>
-
-        client_help_html: |
-          <h4>Client request</h4><p>Use this field to run a request
-          through the API gateway. Of course, you can run exactly the same curl request
-          from a terminal.</p>
-
         enabled_html: "Deployed at %{at}. <a href='%{list}'>See the history.</a>"
         disabled_html: "Not deployed. <a href='%{list}'>See the history.</a>"
 
-        visit_documentation: 'documentation'
+        # start documentation links
         documentation_hosted_url: '%{docs_base_url}/deployment-options/apicast-hosted'
-        documentation_apicast_url: '%{docs_base_url}/deployment-options/apicast-overview'
         documentation_self_managed_url: '%{docs_base_url}/deployment-options/apicast-self-managed-nginx-config-files'
         documentation_oauth_url: '%{docs_base_url}/deployment-options/apicast-oauth-before-may-2017'
         documentation_response_codes_tracking_url: '%{docs_base_url}/admin_portal_guide/response-codes-tracking'
-        documentation_create_active_doc_spec: "%{docs_base_url}/using-developer-portal/create-activedocs-spec"
-
+        documentation_create_active_doc_spec: "%{docs_base_url}/providing_apis_in_the_developer_portal/create-activedocs-spec"
+        # end documentation links
         proxy_rule_catch_all_warning: |
           "Catch all" Mapping Rules often lead to double counts when more specific rules are added.
-        proxy_rule_help_html: |
-          <h4>Mapping Rules Syntax</h4>
-
-          <p>
-            A Mapping Rule has to start with '/'. This looks for matches
-            from the beginning of the string, ignoring the rest if the
-            first characters match. The pattern can only contain valid URL
-            characters and 'wildcards' - words inside curly brackets
-            ('{}') that match any string up to the following slash,
-            ampersand or question mark.
-          </p>
-
-            <h5>Examples</h5>
-            <table>
-              <tr><td>/v1/word/{whateverword}.json </td></td><td></td></tr>
-              <tr><td>/{version}/word/{foo}.json </td></td><td></td></tr>
-              <tr><td>/{version}/word/{bar}.json?action=create </td></td><td></td></tr>
-              <tr><td>/{version}/word/{baz}.json?action={my_action} </td></td><td></td></tr>
-            </table>
-
-          <p>
-           More than one Mapping Rule can match the request path but if <b>none
-           matches, the request is discarded (404)</b>.
-          </p>
-
-          <p>Add a dollar sign ($) to the end of a pattern to apply stricter matching.
-          For example, /foo/bar$ will only match /foo/bar requests and won't match
-          /foo/bar/baz requests.</p>
         curl:
           no_application_plan:
             Start by creating an application plan.
@@ -577,7 +523,6 @@ en:
     phrased:
       self_managed: Self-managed Gateway
       hosted: APIcast
-      on_heroku: Heroku Cloud Gateway
       on_amazon: Amazon Cloud Gateway
       plugin_ruby: Ruby Plugin
       plugin_java: Java Plugin
@@ -596,7 +541,6 @@ en:
       Istio
       <span>A uniform way to secure, connect, and monitor microservices.</span>
 
-    on_heroku: Heroku
     on_amazon: Amazon
     plugin_ruby: |
       Ruby Plugin
@@ -652,6 +596,9 @@ en:
     ruby: Ruby
     python: Python
     rest: REST
+
+  oidc:
+    authorization_flow_warning: "Any changes to the authorization flow of this product will only be applied to new applications; existing applications will continue to use the original flow."
 
   time:
     formats:
@@ -767,6 +714,7 @@ en:
 
   errors:
     messages:
+      host_label_too_long: is too long for one or more labels of the host (maximum is %{count} characters)
       duplicated_user_provider_side: "Duplicate user registration. Delete one of the duplicates in order to continue."
       duplicated_user_buyer_side: "For activating your account please contact support."
       activation_complete: "Signup complete. You can now sign in."
@@ -789,8 +737,6 @@ en:
         last_name: Last Name
       billing_address:
         street_address: Street Address
-    models:
-      end_user: 'EndUser'
     errors:
       models:
         sso_token:
@@ -800,7 +746,6 @@ en:
           invalid_json_body_and_query_paramtypes: "JSON Spec can not have paramType='body' and paramType='query' on the same method."
           invalid_swagger: "JSON Spec is invalid"
           invalid_json: "Invalid JSON"
-
 
   activerecord:
     errors:
@@ -845,6 +790,13 @@ en:
             version:
               mismatch: "differs from the schema version"
               builtin: "cannot be 'builtin'"
+        pricing_rule:
+          attributes:
+            min:
+              overlap: "The 'From' value must be greater than the 'To' values of other existing rules"
+            max:
+              min_max_mismatch: "'To' value cannot be less than your 'From' value"
+
 
         proxy_rule:
           attributes:
@@ -860,11 +812,13 @@ en:
             base:
               cannot_be_destroyed_with_products: cannot be deleted because it is used by at least one Product
             private_endpoint:
-              invalid: "the accepted format is 'http(s)://address(:port)(/path)'"
+              invalid: "the accepted format is 'scheme://address(:port)(/path)'. Accepted schemes are http, https, ws and wss"
         proxy:
           attributes:
+            policies_config:
+              invalid_format: "has invalid format. The Correct format is: [{ \"name\": \"apicast\"... }]"
             api_backend:
-              invalid: "the accepted format is 'http(s)://address(:port)(/path)'"
+              invalid: "the accepted format is 'scheme://address(:port)(/path)'. Accepted schemes are http, https, ws and wss"
             api_test_path:
               invalid: "only URI characters allowed"
             endpoint:
@@ -877,6 +831,8 @@ en:
           attributes:
             service_token:
               missing: 'is not created yet'
+            api_backend:
+              missing: 'is missing'
         account_plan:
           has_contracts: 'This account plan cannot be deleted! At least one account depends on it.'
           customizations_has_contracts: 'This account plan cannot be deleted!  At least one customized version of this account plan exists.'
@@ -885,6 +841,11 @@ en:
           customizations_has_contracts: 'This application plan cannot be deleted!  At least one customized version of this application plan exists.'
         service_plan:
           has_contracts: 'This service plan cannot be deleted! At least one contract depends on it.'
+
+        service:
+          attributes:
+            system_name:
+              invalid: invalid. Only ASCII letters, numbers, dashes and underscores are allowed.
 
         cinstance:
           attributes:
@@ -928,6 +889,7 @@ en:
           attributes:
             base:
               invalid_invoice_state: "Invalid invoice state"
+              invalid_line_item_type: "Invalid Line item type"
 
         web_hook:
           attributes:
@@ -995,7 +957,6 @@ en:
       application_plan: Application plan
       service_plan: Service plan
       account_plan: Account plan
-      end_user_plan: EndUser plan
 
       cms/builtin:
       cms/builtin/page: Built-in page
@@ -1068,7 +1029,6 @@ en:
 
       # Service attributes
       service:
-        credit_card_support_email: "Who should be emailed, to change credit card details?"
         friendly_id: URL
         txt_support: Contact and Support Information
 
@@ -1136,13 +1096,14 @@ en:
 
     services:
       create:
-        notice: "%{resource_type} created."
-        error: "Couldn't create %{resource_type}. Check your Plan limits" # TODO: this is not always true... there are other reasons of failure
+        notice: "Product created."
+        errors:
+          default: "Couldn't create Product. Check your Plan limits"
       update:
-        notice: "%{resource_type} information updated."
-        error: "Couldn't update %{resource_type}."
+        notice: "Product information updated."
+        error: "Couldn't update Product."
       destroy:
-        notice: "%{resource_type} '%{resource_name}' will be deleted shortly. You will receive a notification when it is done"
+        notice: "Product '%{resource_name}' will be deleted shortly. You will receive a notification when it is done"
 
   proxy:
     credentials_location:
@@ -1158,29 +1119,17 @@ en:
         current_password: |
           Any other active session(s) for this user account will be terminated when you update your personal details
           to be sure it's you and not somebody else trying to lock you out of your account.
-      deployment_option_gateway: |
-        A gateway is the most maintainable and scalable way to integrate your API with 3scale as you won't have to touch your API at all;
-        a gateway sits in front of your API as a completely separate entity. Developers will make requests on the gateway,
-        the gateway will communicate (asynchronously) with 3scale for Access Control & Traffic Reporting and forward the original requests to your API.
-      deployment_option_plugin: |
-        Plugins provide a wrapper for the 3scale API that enables API Access Control and API Traffic Reporting without having to run another server.
-        A plugin lives inside the code that powers your API. The plugin calls the 3scale API for Access Control & Traffic Reporting.
-      deployment_option_service_mesh: |
-        The term service mesh is used to describe the network of microservices that make up the applications and the interactions between them.
-        As a service mesh grows in size and complexity, it can become harder to understand and manage. Its requirements can include discovery, load balancing, failure recovery, metrics, and monitoring.
-        A service mesh also often has more complex operational requirements, like A/B testing, canary releases, rate limiting, access control, and end-to-end authentication.
       subdomain: "The domain name is the initial temporary domain name for your developer portal - you can change this to your own domain name later."
       handler: "Do you use any markup language?"
       liquid_enabled: "Process Liquid tags and drops?"
 
       api_docs/service:
-        body: 'Specification must comply with Swagger <a href="https://github.com/swagger-api/swagger-spec/blob/master/versions/1.2.md#52-api-declaration">1.2</a> or <a href="https://github.com/swagger-api/swagger-spec/blob/master/versions/2.0.md">2.0</a>.'
+        body: 'Specification must comply with Swagger <a href="https://github.com/swagger-api/swagger-spec/blob/master/versions/1.2.md#52-api-declaration">1.2</a>, <a href="https://github.com/swagger-api/swagger-spec/blob/master/versions/2.0.md">2.0</a> or <a href="https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.2.md">3.0</a>'
         system_name: "Only ASCII letters, numbers, dashes and underscores are allowed.<br/><span style='font-size:90%;color:red'>Warning: With ActiveDocs 1.2 the API will be described in your developer portal as <i>System name: Description</i></span>"
 
       settings:
         account_plans_ui_visible: "Only consider using Account Plans if Application Plans don't suit your use case - for example if you offer additional non-API services."
         service_plans_ui_visible: "Only consider using Service Plans for non-API features like additional support per Service instead of for the whole Account."
-        end_user_plans_ui_visible: "End User Plans make it possible to divide the rate limits of an Application Plan per end user. This way each end user of an application gets his/her fair share of the application rate limit."
         approval_required_referer: "Set per account plan from %{link}."
         account_approval_required: "Approval is required by you before developer accounts are activated."
         change_account_plan_permission: "When 'Request plan change' is selected you will be informed about users' requests by email - you can then execute the plan change in the administration interface."
@@ -1230,13 +1179,14 @@ en:
         endpoint: "Public address of your API gateway in the production environment. This field customizes the server_name directive in the NGINX Config file and defaults to $hostname if left blank."
         endpoint_apicast_2_openshift_html:
           Public address of your API gateway in the %{environment_name} environment.
-          <span>Make sure to <a href="https://docs.openshift.com/container-platform/latest/dev_guide/routes.html#creating-routes">add the correct route</a></span>
+          <span>Make sure to <a href="https://docs.openshift.com/container-platform/3.11/dev_guide/routes.html#creating-routes">add the correct route</a></span>
         endpoint_apicast_2_html: >
           Public address of your API gateway in the %{environment_name} environment.
-        api_backend_https: "Private address of your API that will be called by the API gateway."
+        api_backend_https: |
+          Private address of your API that will be called by the API gateway.
+          <span class="protocol-warn">For end-to-end encryption your private base URL scheme should use a secure protocol (https or wss).</span>
         api_backend_http: |
           Private address of your API that will be called by the API gateway.
-          <span class="warn">For end-to-end encryption your private base URL scheme should be https</span>.
         oauth_login_url: |
            Since the service has OAuth authentication enabled you have
            to provide a URL where the <em>consumers</em> login and
@@ -1251,8 +1201,6 @@ en:
            API gateway and OAuth setup</a> on our support page.
         oidc_issuer_endpoint: |
           Location of your OpenID Provider. The format of this endpoint is determined on your OpenID Provider setup. A common guidance would be "https://&lt;CLIENT_ID&gt;:&lt;CLIENT_SECRET&gt;@&lt;HOST&gt;:&lt;PORT&gt;/auth/realms/&lt;REALM_NAME&gt;".
-        api_test_path: "Optional GET request to a API gateway endpoint. We will use this call to validate your API gateway setup using credentials of the first live application. You can try it yourself by copying the following command into your shell:"
-        api_test_path_blank: "Optional GET request to a API gateway endpoint. This call has been left blank and therefore it will not be possible to test if the connection between client, API gateway & API is working correctly."
         hostname_rewrite: |
           Lets you define a custom <code>Host</code> request header. This is needed if your API backend only accepts traffic from a specific host.
         secret_token: |
@@ -1270,7 +1218,6 @@ en:
         buyers_manage_keys: "Makes applications Keys visible on the developer dashboard. This setting makes sense only when former one is checked."
         referrer_filters_required: "Developers with access to your API must indicate allowed domain / IP referrers."
         custom_keys_enabled: "Allows you to create custom keys for developers"
-        end_user_registration_required: "Requires End Users to be registered beforehand versus being created automatically"
         buyer_can_select_plan: "If left unchecked, the plan marked as 'default' will be selected."
         deployment_option: "At this moment the APIcast deployment option & OAuth authentication scheme are mutually exclusive."
     actions:
@@ -1292,7 +1239,6 @@ en:
         custom_keys_enabled: "Enable custom keys"
         buyer_key_regenerate_enabled: "Allow developers to regenerate access keys"
         mandatory_app_key: "Require at least 1 application key"
-        end_user_registration_required: "Manual End User registration"
         buyer_can_select_plan: "Developers can select a plan when creating a new application"
         backend_version: "Authentication: Parameters developers must send to the API in order to identify themselves:"
 
@@ -1312,7 +1258,6 @@ en:
       settings:
         account_plans_ui_visible: "Account Plans"
         service_plans_ui_visible: "Service Plans"
-        end_user_plans_ui_visible: "End User Plans"
         change_account_plan_permission: "For their account, a user can:"
         change_service_plan_permission: "For a service, a subscribed user can:"
         useraccountarea_enabled: 'Allow the user to edit their submitted details, change passwords, etc.'

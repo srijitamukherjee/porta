@@ -1,7 +1,7 @@
 require 'test_helper'
 
 class Account::SearchTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
+  include ActiveJob::TestHelper
 
   test 'search without query returns all accounts by default, not using sphinx' do
     pending  = FactoryBot.create(:pending_account)
@@ -65,8 +65,24 @@ class Account::SearchTest < ActiveSupport::TestCase
     assert_equal 'fo\/o', Account.search_ids('fo/o').query
   end
 
+  test 'search with query by email' do
+    ThinkingSphinx::Test.rt_run do
+      perform_enqueued_jobs(only: SphinxIndexationWorker) do
+        provider = FactoryBot.create(:simple_provider)
+        buyers = FactoryBot.create_list(:simple_buyer, 2, provider_account: provider)
+        ['foo@bar.co.example.com', 'foo@example.org'].each_with_index do |email, buyer_index|
+          FactoryBot.create(:admin, account: buyers[buyer_index], email: email)
+        end
+
+        buyers = provider.buyer_accounts.scope_search(:query => 'foo@bar.co.example.com')
+        expected_buyer = User.find_by!(email: 'foo@bar.co.example.com').account
+        assert_equal [expected_buyer], buyers
+      end
+    end
+  end
+
   test 'search_ids options' do
-    ThinkingSphinx::Test.run do
+    ThinkingSphinx::Test.rt_run do
       assert Account.buyers.search_ids('foo').populate
     end
 
@@ -114,16 +130,18 @@ class Account::SearchTest < ActiveSupport::TestCase
   end
 
   test 'search user_key without keyword with many records is always indexed and found' do
-    service = FactoryBot.create(:simple_service)
-    buyer = FactoryBot.create(:simple_buyer)
-    FactoryBot.create_list(:application_plan, 5, issuer: service).each_with_index do |plan, index|
-      contract = plan.create_contract_with!(buyer)
-      contract.update_column(:user_key, (index.to_s * 256))
-    end
+    ThinkingSphinx::Test.rt_run do
+      perform_enqueued_jobs(only: SphinxIndexationWorker) do
+        service = FactoryBot.create(:simple_service)
+        buyer = FactoryBot.create(:simple_buyer)
+        FactoryBot.create_list(:application_plan, 5, issuer: service).each_with_index do |plan, index|
+          contract = plan.create_contract_with!(buyer)
+          contract.update!(user_key: (index.to_s * 256))
+        end
 
-    Indexer.run_after_index do
-      buyer.bought_cinstances.pluck(:user_key).each do |user_key|
-        assert_equal [buyer.id], Account.scope_search(query: user_key).pluck(:id)
+        buyer.bought_cinstances.pluck(:user_key).each do |user_key|
+          assert_equal [buyer.id], Account.scope_search(query: user_key).pluck(:id)
+        end
       end
     end
   end

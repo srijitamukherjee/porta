@@ -2,7 +2,7 @@
 
 import React from 'react'
 import type { Node } from 'react'
-import {createReactWrapper} from 'utilities/createReactWrapper'
+import {createReactWrapper} from 'utilities'
 import 'url-polyfill'
 
 import {
@@ -12,7 +12,6 @@ import {
 import {
   ForgotCredentials,
   Login3scaleForm,
-  RequestPasswordForm,
   AuthenticationProviders,
   FlashMessages
 } from 'LoginPage'
@@ -22,30 +21,25 @@ import 'LoginPage/assets/styles/loginPage.scss'
 import brandImg from 'LoginPage/assets/images/3scale_Logo_Reverse.png'
 import PF4DownstreamBG from 'LoginPage/assets/images/PF4DownstreamBG.svg'
 
-type FlashMessage = {
-  type: string,
-  message: string
-}
+import type { FlashMessage } from 'Types'
+import type { ProvidersProps } from 'LoginPage'
 
 type Props = {
-  enforceSSO: boolean,
-  authenticationProviders: Array<mixed>,
-  flashMessages: Array<FlashMessage>,
+  authenticationProviders: Array<ProvidersProps>,
+  flashMessages?: Array<FlashMessage>,
   providerAdminDashboardPath: string,
   providerLoginPath: string,
-  providerPasswordPath: string,
   providerSessionsPath: string,
+  providerRequestPasswordResetPath: string,
   redirectUrl: string,
   show3scaleLoginForm: boolean,
+  disablePasswordReset: boolean,
   session: {
     username: ?string
   }
 }
 
-const formModeTuple: [string, string] = ['login', 'password-reset']
-
 type State = {
-  formMode: string,
   loginTitle: string
 }
 
@@ -53,37 +47,22 @@ class SimpleLoginPage extends React.Component<Props, State> {
   constructor (props: Props) {
     super(props)
     this.state = {
-      formMode: 'login',
       loginTitle: 'Log in to your account'
     }
   }
 
-  setFormMode ({win = window}: {win?: Window}) {
-    try {
-      const url = new URL(win.location.href)
-      const formMode = url.search === '?request_password_reset=true' ? formModeTuple[1] : formModeTuple[0]
-      const loginTitle = formMode === 'login' ? 'Log in to your account' : 'Request a password reset link by email'
-      this.setState({formMode, loginTitle})
-    } catch (e) {
-      console.error(e)
-    }
+  showForgotCredentials (): Node {
+    const { disablePasswordReset, providerRequestPasswordResetPath, show3scaleLoginForm } = this.props
+    const showResetPasswordLink = show3scaleLoginForm && !disablePasswordReset
+    return showResetPasswordLink && <ForgotCredentials requestPasswordResetPath={providerRequestPasswordResetPath} />
   }
 
-  componentDidMount () {
-    this.setFormMode(window)
-  }
-
-  showForgotCredentials () {
-    const showForgotCredentials = this.state.formMode === formModeTuple[0]
-    return showForgotCredentials && <ForgotCredentials providerLoginPath={this.props.providerLoginPath}/>
-  }
-
-  loginForm () {
+  loginForm (): Node {
     const hasAuthenticationProviders = this.props.authenticationProviders
-    const enforceSSO = this.props.enforceSSO
+    const show3scaleLoginForm = this.props.show3scaleLoginForm
     return (
       <React.Fragment>
-        { !enforceSSO &&
+        { show3scaleLoginForm &&
             <Login3scaleForm
               providerSessionsPath={this.props.providerSessionsPath}
               session={this.props.session}
@@ -115,21 +94,13 @@ class SimpleLoginPage extends React.Component<Props, State> {
           this.props.flashMessages &&
           <FlashMessages flashMessages={this.props.flashMessages}/>
         }
-        {this.state.formMode === formModeTuple[0] &&
-          this.loginForm()
-        }
-        {this.state.formMode === formModeTuple[1] &&
-          <RequestPasswordForm
-            providerPasswordPath={this.props.providerPasswordPath}
-            providerLoginPath={this.props.providerLoginPath}
-          />
-        }
+        { this.loginForm() }
       </LoginPage>
     )
   }
 }
 
-const LoginPageWrapper = (props: Props, containerId: string) =>
+const LoginPageWrapper = (props: Props, containerId: string): void =>
   createReactWrapper(<SimpleLoginPage {...props} />, containerId)
 
 export {SimpleLoginPage, LoginPageWrapper}

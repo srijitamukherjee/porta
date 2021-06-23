@@ -38,12 +38,11 @@ module DeveloperPortal::CMS::ToolbarHelper
     if template.new_record?
       # This should not happen when we have all templates in db
     else
-      opts = { host: site_account.self_domain }
-      opts = ThreeScale::DevDomain::URL.options(request, opts) if ThreeScale::DevDomain.enabled?
+      opts = { host: site_account.external_self_domain }
 
       # main_app is not available in the engine
       routes = Rails.application.routes
-      main_app = ActionDispatch::Routing::RoutesProxy.new(routes, self, routes.url_helpers)
+      main_app = ActionDispatch::Routing::RoutesProxy.new(routes, self, System::UrlHelpers.system_url_helpers)
 
       polymorphic_url([ main_app, :edit, :provider, :admin, template ], opts)
     end

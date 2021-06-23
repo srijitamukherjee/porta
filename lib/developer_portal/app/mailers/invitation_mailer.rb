@@ -1,7 +1,7 @@
 class InvitationMailer < ActionMailer::Base
 
   include Liquid::Assigns
-  include DeveloperPortal::Engine.routes.url_helpers
+  include System::UrlHelpers.cms_url_helpers
   include CMS::EmailTemplate::MailerExtension
 
   def invitation(invitation)
@@ -15,10 +15,10 @@ class InvitationMailer < ActionMailer::Base
 
     domain = if @invitation.account.provider?
                self.provider_account = @invitation.account
-               provider.admin_domain
+               provider.external_admin_domain
              else
                self.provider_account = @invitation.account.provider_account
-               provider.domain
+               provider.external_domain
              end
 
     @url = invitee_signup_url(:invitation_token => @invitation.token,

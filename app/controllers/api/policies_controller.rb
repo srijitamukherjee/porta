@@ -28,7 +28,6 @@ class Api::PoliciesController < Api::BaseController
   end
 
   def check_permission
-    provider_can_use! :api_as_product
     authorize! :edit, service
     raise Cancan::AccessDenied unless service.can_use_policies?
   end
@@ -42,7 +41,8 @@ class Api::PoliciesController < Api::BaseController
   end
 
   def find_resources
-    @registry_policies = Policies::PoliciesListService.call!(current_account, proxy: proxy)
+    policies_list = Policies::PoliciesListService.call!(current_account, proxy: proxy)
+    @registry_policies = PoliciesListPresenter.new(policies_list).registry
   rescue StandardError => error
     @error = error
   end

@@ -5,20 +5,20 @@ Feature: Bulk operations
   I want to change account states in bulk
 
   Background:
-    Given a provider "foo.example.com"
-      And provider "foo.example.com" has "service_plans" visible
-      And a default service of provider "foo.example.com" has name "Fancy API"
-      And a service "New Service" of provider "foo.example.com"
+    Given a provider "foo.3scale.localhost"
+      And provider "foo.3scale.localhost" has "service_plans" visible
+      And a default service of provider "foo.3scale.localhost" has name "Fancy API"
+      And a service "New Service" of provider "foo.3scale.localhost"
     Given a default service plan "Basic" of service "Fancy API"
       And a service plan "Unpublished" of service "New Service"
 
-    Given the following buyers with service subscriptions signed up to provider "foo.example.com":
+    Given the following buyers with service subscriptions signed up to provider "foo.3scale.localhost":
       | name | plans              | state     |
       | bob  | Basic, Unpublished | pending   |
       | jane | Basic              | live      |
       | mike | Unpublished        | suspended |
-    Given current domain is the admin domain of provider "foo.example.com"
-    Given I am logged in as provider "foo.example.com"
+    Given current domain is the admin domain of provider "foo.3scale.localhost"
+    Given I am logged in as provider "foo.3scale.localhost"
 
   Scenario: Accept subscription
       And I am on the service contracts admin page
@@ -34,7 +34,10 @@ Feature: Bulk operations
 
     Then I should see "Action completed successfully"
 
-    # there is no transision suspended => live
+    When I go to the service contracts admin page
+     And I follow "Account" within table
+
+    # there is no transition suspended => live
     Then I should see following table:
      | Account ▲ | State     |
      | bob       | live      |
@@ -55,6 +58,9 @@ Feature: Bulk operations
      And I press "Change state" and I confirm dialog box within fancybox
 
     Then I should see "Action completed successfully"
+
+    When I go to the service contracts admin page
+     And I follow "Account" within table
 
     # pending cannot be changed to suspended
     Then I should see following table:
@@ -78,6 +84,9 @@ Feature: Bulk operations
 
     Then I should see "Action completed successfully"
 
+    When I go to the service contracts admin page
+     And I follow "Account" within table
+
     # resume = suspended => live
     Then I should see following table:
       | Account ▲ | State   |
@@ -85,4 +94,3 @@ Feature: Bulk operations
       | bob       | pending |
       | jane      | live    |
       | mike      | live    |
-

@@ -1,15 +1,24 @@
 # frozen_string_literal: true
 
 class BackendApi < ApplicationRecord
+  include Searchable
   include SystemName
+  include ProxyConfigAffectingChanges::ModelExtension
+
+  define_proxy_config_affecting_attributes :private_endpoint
+
+  self.background_deletion = %i[proxy_rules metrics backend_api_configs]
 
   DELETED_STATE = :deleted
   ECHO_API_HOST = 'echo-api.3scale.net'
 
+  before_validation :set_port_private_endpoint
+  after_create :create_default_metrics
   before_destroy :validate_destroyed_by_association_or_not_used_by_services
 
   has_many :proxy_rules, as: :owner, dependent: :destroy, inverse_of: :owner
   has_many :metrics, as: :owner, dependent: :destroy, inverse_of: :owner
+  alias_method :all_metrics, :metrics
 
   has_many :backend_api_configs, inverse_of: :backend_api, dependent: :destroy
   has_many :services, through: :backend_api_configs
@@ -26,35 +35,27 @@ class BackendApi < ApplicationRecord
 
   validates :private_endpoint, length: { maximum: 255 },
     presence: true,
-    uri: { path: proc { provider_can_use?(:proxy_private_base_path) } },
+    uri: { path: ->(backend_api_object) { backend_api_object.provider_can_use?(:proxy_private_base_path) }, scheme: %w[http https ws wss] },
     non_localhost: { message: :protected_domain }
 
   alias_attribute :api_backend, :private_endpoint
 
-  before_validation :set_private_endpoint, :set_port_private_endpoint
-  after_create :create_default_metrics
-
   has_system_name(uniqueness_scope: [:account_id])
 
-  scope :orphans, -> { where.has { id.not_in(BackendApiConfig.selecting { :backend_api_id }) } }
+  scope :orphans, -> {
+    where.has do
+      not_exists(BackendApiConfig.except(:order).by_backend_api(BabySqueel[:backend_apis].id).select(:id))
+    end
+  }
 
   scope :not_used_by, ->(service_id) {
-    # TODO: Baby Squeel
-    # It should be:
-    # where.has do
-    #   not_exists BackendApiConfig.by_service(service_id).by_backend_api(BabySqueel[:backend_apis].id).select(:id)
-    # end
-    # And that works for MySQL and Postgres but not Oracle
-    sql_query = <<~SQL
-      (
-        NOT EXISTS (
-          SELECT id
-          FROM backend_api_configs
-          WHERE service_id = ? AND backend_api_configs.backend_api_id = backend_apis.id
-        )
+    where.has do
+      not_exists(
+        BackendApiConfig.except(:order).select(:id)
+          .by_service(service_id)
+          .by_backend_api(BabySqueel[:backend_apis].id)
       )
-    SQL
-    where(sql_query, service_id)
+    end
   }
 
   scope :oldest_first, -> { order(created_at: :asc) }
@@ -95,15 +96,14 @@ class BackendApi < ApplicationRecord
     metrics.create_default!(:hits)
   end
 
+  def scheduled_for_deletion?
+    deleted? || !account || account.scheduled_for_deletion?
+  end
+
   private
 
   def schedule_deletion
     DeleteObjectHierarchyWorker.perform_later(self)
-  end
-
-  def set_private_endpoint
-    return if account.provider_can_use?(:api_as_product)
-    self.private_endpoint ||= default_api_backend
   end
 
   def set_port_private_endpoint

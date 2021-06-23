@@ -88,9 +88,8 @@ Then /^I should not see link "([^"]*)" within "([^"]*)"$/ do |label, selector|
   end
 end
 
-Then /^I should see button "([^\"]*)"$/ do |label|
-  assert has_button?(label)
-  assert has_button?(label)
+Then(/^I should see button "([^"]*)"( disabled)?$/) do |label, disabled|
+  assert find_button(label, disabled: disabled.present?)
 end
 
 Then /^I should not see button "([^\"]*)"$/ do |label|
@@ -106,8 +105,17 @@ Then /^I should not see button "([^\"]*)" within "([^"]*)"$/ do |label, selector
 end
 
 Then /^the "([^"]*)" select should not contain "([^"]*)" option$/ do |label, text|
-  select = find_field(label)
-  assert select.all('option', :text => text).empty?, %(The "#{label}" select should not contain "#{text}" option, but it does)
+  if page.has_css?('.pf-c-form__label', text: label)
+    select = find('.pf-c-form__label', text: label).sibling('.pf-c-select')
+    select.find('.pf-c-select__toggle-button').click
+    selector = '.pf-c-select__menu-item'
+  else
+    # DEPRECATED: remove when all selects have been replaced for PF4
+    ThreeScale::Deprecation.warn "[cucumber] Detected a select not using PF4 css"
+    selector = 'option'
+    select = find_field(label)
+  end
+  assert select.all(selector, :text => text).empty?, %(The "#{label}" select should not contain "#{text}" option, but it does)
 end
 
 Then /^the "([^"]*)" select should have "([^"]*)" selected$/ do |label, text|
@@ -168,10 +176,6 @@ Then /^I should not see image "([^"]*)"$/ do |file|
   assert(all('img').none? do |image|
     File.basename(image[:src]) == file
   end)
-end
-
-Then /^I should see the following table:$/ do |table|
-  table.diff!(extract_table('table', 'tr', 'th,td'))
 end
 
 Then /^I should see "([^"]*)" in the "([^"]*)" column and "([^"]*)" row$/ do |text, column, row|
@@ -238,7 +242,7 @@ When /^(.*) within ([^:"]+)$/ do |lstep, scope|
 end
 
 [ 'the audience dashboard widget', 'the apis dashboard widget',
-  'the apis dashboard products tabs section', 'the apis dashboard backends tabs section',
+  'the apis dashboard products widget', 'the apis dashboard backends widget',
   'the first api dashboard widget',
   'the main menu',
   'the subsubmenu','the user widget',
@@ -298,6 +302,7 @@ And(/^I press "([^"]*)" inside the dropdown$/) do |name|
 
   toggle.click
   find(:xpath, link).click
+  wait_for_requests
 end
 
 toggled_input_selector = '[data-behavior="toggle-inputs"] legend'

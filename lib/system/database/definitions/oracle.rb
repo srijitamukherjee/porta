@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'system/database/oracle'
+
 System::Database::Oracle.define do
   trigger 'accounts' do
     <<~SQL
@@ -58,12 +60,6 @@ System::Database::Oracle.define do
       ELSIF :new.configurable_type = 'Service' THEN
          SELECT tenant_id INTO :new.tenant_id FROM services WHERE id = :new.configurable_id AND tenant_id <> master_id;
       END IF;
-    SQL
-  end
-
-  trigger 'end_user_plans' do
-    <<~SQL
-      SELECT tenant_id INTO :new.tenant_id FROM services WHERE id = :new.service_id AND tenant_id <> master_id;
     SQL
   end
 
@@ -526,6 +522,12 @@ System::Database::Oracle.define do
   trigger 'payment_details' do
     <<~SQL
       SELECT tenant_id INTO :new.tenant_id FROM accounts WHERE id = :new.account_id AND tenant_id <> master_id;
+    SQL
+  end
+
+  trigger 'payment_intents' do
+    <<~SQL
+      SELECT tenant_id INTO :new.tenant_id FROM invoices WHERE id = :new.invoice_id AND tenant_id <> master_id;
     SQL
   end
 

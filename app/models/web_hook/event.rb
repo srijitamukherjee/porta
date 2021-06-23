@@ -56,6 +56,10 @@ class WebHook
       enqueue_now
     end
 
+    def before_committed!(*)
+      # noop
+    end
+
     def rolledback!(*)
       logger.info "Rolledback WebHook::Event(#{id}) #{event} for #{model}##{resource.id}"
     end
@@ -72,7 +76,7 @@ class WebHook
 
     # this could be activemodel validation
     def valid?
-       enabled? && push_event?  && push_user? && provider.web_hooks_allowed?
+      enabled? && push_event?  && push_user? && provider.web_hooks_allowed?
     end
 
     # use i18n to figure this out

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'system/database/procedure'
+
 System::Database::Postgres.define do
   trigger 'accounts' do
     <<~SQL
@@ -58,12 +60,6 @@ System::Database::Postgres.define do
       ELSIF NEW.configurable_type = 'Service' THEN
          SELECT tenant_id INTO NEW.tenant_id FROM services WHERE id = NEW.configurable_id AND tenant_id <> master_id;
       END IF;
-    SQL
-  end
-
-  trigger 'end_user_plans' do
-    <<~SQL
-      SELECT tenant_id INTO NEW.tenant_id FROM services WHERE id = NEW.service_id AND tenant_id <> master_id;
     SQL
   end
 
@@ -526,6 +522,12 @@ System::Database::Postgres.define do
   trigger 'payment_details' do
     <<~SQL
       SELECT tenant_id INTO NEW.tenant_id FROM accounts WHERE id = NEW.account_id AND tenant_id <> master_id;
+    SQL
+  end
+
+  trigger 'payment_intents' do
+    <<~SQL
+      SELECT tenant_id INTO NEW.tenant_id FROM invoices WHERE id = NEW.invoice_id AND tenant_id <> master_id;
     SQL
   end
 

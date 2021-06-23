@@ -1,9 +1,11 @@
+// @flow
+
 import React from 'react'
 import {act} from 'react-dom/test-utils'
 import {mount, shallow, render} from 'enzyme'
 
 import {ServiceDiscoveryListItems} from 'NewService/components/FormElements'
-import * as utils from 'utilities/utils'
+import * as utils from 'utilities/fetchData'
 import { BASE_PATH } from 'NewService'
 
 const projects = ['project_00', 'project_01']
@@ -81,7 +83,9 @@ describe('fetchServices', () => {
     })
 
     // Assert selects are not disabled after fetched
+    // $FlowIgnore[incompatible-use]
     wrapper.update()
+    // $FlowIgnore[incompatible-use]
     expect(wrapper.find('select').everyWhere(n => n.prop('disabled') === false)).toBe(true)
   })
 })

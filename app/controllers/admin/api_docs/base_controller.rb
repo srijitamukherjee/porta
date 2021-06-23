@@ -1,30 +1,26 @@
 # frozen_string_literal: true
 
 class Admin::ApiDocs::BaseController < FrontendController
-  before_action :find_api_docs, only: %i[destroy edit update show preview toggle_visible]
   before_action :deny_on_premises_for_master
+  before_action :authorize_api_docs
+  before_action :find_api_docs, only: %i[show preview toggle_visible edit update destroy]
+  before_action :new_service_id_permitted, only: %i[create update]
 
-
-
-  def preview
-    if api_docs_service.specification.swagger?
-      respond_to do |format|
-        format.html { render 'swagger' }
-        format.json { render json: swagger_spec }
-      end
-    else
-      @host = current_account.domain
-      @resource = api_docs_service.system_name
-      @spec = ApiDocs::Service.spec_for api_docs_service
-      render 'active_docs'
-    end
+  def index
+    @api_docs_services = accessible_api_docs_services.page(params[:page]).includes(:service)
   end
 
-  def toggle_visible
-    api_docs_service.toggle! :published
+  def new
+    @api_docs_service = api_docs_services.new
+  end
 
-    message = api_docs_service.published? ? 'published' : 'unpublished'
-    redirect_to preview_admin_api_docs_service_path(api_docs_service), notice: "Spec #{api_docs_service.name} #{message}"
+  def create
+    @api_docs_service = api_docs_services.new(api_docs_params(:system_name), without_protection: true)
+    if @api_docs_service.save
+      redirect_to(preview_admin_api_docs_service_path(@api_docs_service), notice: 'ActiveDocs Spec was successfully saved.')
+    else
+      render :new
+    end
   end
 
   def show
@@ -43,8 +39,25 @@ class Admin::ApiDocs::BaseController < FrontendController
     end
   end
 
-  def new
-    @api_docs_service = current_scope.api_docs_services.new
+  def preview
+    if api_docs_service.specification.swagger?
+      respond_to do |format|
+        format.html { render 'swagger' }
+        format.json { render json: swagger_spec }
+      end
+    else
+      @host = current_account.external_domain
+      @resource = api_docs_service.system_name
+      @spec = ApiDocs::Service.spec_for api_docs_service
+      render 'active_docs'
+    end
+  end
+
+  def toggle_visible
+    api_docs_service.toggle! :published
+
+    message = api_docs_service.published? ? 'published' : 'unpublished'
+    redirect_to preview_admin_api_docs_service_path(api_docs_service), notice: "Spec #{api_docs_service.name} #{message}"
   end
 
   def edit; end
@@ -59,19 +72,6 @@ class Admin::ApiDocs::BaseController < FrontendController
         format.html { render :edit }
         format.js {}
       end
-    end
-  end
-
-  def index
-    @api_docs_services = current_scope.api_docs_services.page(params[:page]).includes(:service)
-  end
-
-  def create
-    @api_docs_service = current_scope.api_docs_services.new(api_docs_params(:system_name), without_protection: true)
-    if @api_docs_service.save
-      redirect_to(preview_admin_api_docs_service_path(@api_docs_service), notice: 'ActiveDocs Spec was successfully saved.')
-    else
-      render :new
     end
   end
 
@@ -93,8 +93,21 @@ class Admin::ApiDocs::BaseController < FrontendController
     params.require(:api_docs_service).permit(*permit_params)
   end
 
+  def api_docs_services
+    current_scope.api_docs_services
+  end
+
+  def accessible_api_docs_services
+    api_docs_services.permitted_for(current_user)
+  end
+
   def find_api_docs
-    @api_docs_service = current_scope.api_docs_services.find_by_id_or_system_name!(params[:id])
+    @api_docs_service = accessible_api_docs_services.find_by_id_or_system_name!(params[:id])
+  end
+
+  def new_service_id_permitted
+    service_id = api_docs_params[:service_id]
+    service_id.blank? || current_user.accessible_services.find(service_id)
   end
 
   def swagger_spec
@@ -111,7 +124,11 @@ class Admin::ApiDocs::BaseController < FrontendController
           path: "#{admin_api_docs_service_path(api_docs_service.system_name)}.{format}"
         }
       ],
-      basePath: "#{request.protocol}#{request_target_host}"
+      basePath: "#{request.protocol}#{request.host_with_port}"
     }
+  end
+
+  def authorize_api_docs
+    authorize! :manage, :plans
   end
 end

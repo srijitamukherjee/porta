@@ -1,11 +1,12 @@
 // @flow
 
-import React from 'react'
+import * as React from 'react'
 import type {FormProps} from 'NewService/types'
-import {CSRFToken} from 'utilities/utils'
+import {CSRFToken} from 'utilities'
 import {HiddenServiceDiscoveryInput} from 'NewService/components/FormElements'
+import { Button } from '@patternfly/react-core'
 
-const FormWrapper = (props: FormProps) => {
+const FormWrapper = (props: FormProps): React.Node => {
   const {id, formActionPath, hasHiddenServiceDiscoveryInput, submitText} = props
   return (
     <form
@@ -19,17 +20,17 @@ const FormWrapper = (props: FormProps) => {
       <CSRFToken />
       {hasHiddenServiceDiscoveryInput && <HiddenServiceDiscoveryInput />}
       <fieldset className="inputs" name="Service">
-        <legend><span>Service</span></legend>
+        <legend><span>Product</span></legend>
         <ol>
           {props.children}
         </ol>
       </fieldset>
       <fieldset className="buttons">
-        <input
+        <Button
+          data-testid="newProductCreateProduct-buttonSubmit"
           type="submit"
           name="commit"
-          value={submitText}
-          className="important-button create"/>
+          className="create">{ submitText }</Button>
       </fieldset>
     </form>
   )

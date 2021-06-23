@@ -50,7 +50,6 @@ module ThreeScale
       config = ThreeScale.config.segment
       Segment = TrackingAdapter.new(config.merge(on_error: error_handler))
 
-      include ::ThreeScale::MethodTracing
 
       class << self
         delegate :flush, to: 'ThreeScale::Analytics::UserTracking::Segment', allow_nil: true
@@ -77,7 +76,7 @@ module ThreeScale
             firstName: @user.first_name,
             lastName: @user.last_name,
             lastSeen: Time.now,
-            name: @user.full_name,
+            name: @user.decorate.full_name,
             username: @user.username,
             phone: @account.telephone_number,
             organization: @account.org_name,
@@ -102,8 +101,8 @@ module ThreeScale
             partner: extra_fields['partner'],
 
             account_id: @account.id,
-            domain: @account.domain,
-            self_domain: @account.self_domain
+            domain: @account.internal_domain,
+            self_domain: @account.internal_self_domain
         }
       end
 
@@ -146,8 +145,6 @@ module ThreeScale
           }.merge(developer_accounts).merge(developer_applications)
         end
       end
-
-      add_three_scale_method_tracer :extended_traits, 'Custom/ThreeScale::Analytics::UserTracking#extended_traits'
 
       def flush
         Segment.flush

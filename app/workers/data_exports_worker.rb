@@ -1,5 +1,6 @@
+# frozen_string_literal: true
+
 require 'zip'
-require_dependency 'csv'
 
 class DataExportsWorker
   include Sidekiq::Worker

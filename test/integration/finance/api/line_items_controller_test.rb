@@ -5,6 +5,7 @@ class Finance::Api::LineItemsControllerTest < ActionDispatch::IntegrationTest
   def setup
     @provider = FactoryBot.create(:provider_with_billing)
     @buyer = FactoryBot.create(:simple_buyer, provider_account: @provider)
+    @provider.settings.allow_finance!
     login! @provider
     @invoice = FactoryBot.create(:invoice, provider_account: @provider, buyer_account: @buyer)
     @line_item = FactoryBot.create(:line_item, invoice: @invoice, name: 'fakeName')
@@ -84,16 +85,11 @@ class Finance::Api::LineItemsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 2222, plan_id
   end
 
-  test '#create' do
-    post api_invoice_line_items_path(@invoice.id), line_item_params, accept: Mime[:json]
-    assert_response :success
-  end
-
   test '#create with attributes saved correctly' do
     assert_difference LineItem.method(:count) do
       post api_invoice_line_items_path(@invoice.id), line_item_params, accept: Mime[:json]
     end
-    new_line_item = LineItem.reorder(:id).last
+    new_line_item = LineItem.reorder(:id).last!
     line_item_params.each do |field_name, field_value|
       assert_equal field_value, new_line_item.send(field_name)
     end
@@ -104,6 +100,15 @@ class Finance::Api::LineItemsControllerTest < ActionDispatch::IntegrationTest
     post api_invoice_line_items_path(@invoice.id), line_item_params, accept: Mime[:json]
     assert_equal ({errors: {base: ['Invalid invoice state']}}).to_json, @response.body
     assert_response 422
+  end
+
+  test 'does not raise an error if the cost cannot be converted to BigDecimal' do
+    assert_difference '@invoice.line_items.count', 1 do
+      post api_invoice_line_items_path(@invoice.id), line_item_params.merge(cost: '$5.50'), accept: Mime[:json]
+    end
+    assert_response :created
+    line_item = @invoice.line_items.order(:id).last!
+    assert_equal ThreeScale::Money.new(0, line_item.currency), line_item.cost
   end
 
   test '#destroy' do

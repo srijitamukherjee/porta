@@ -13,6 +13,11 @@ class Provider::Admin::BackendApisControllerTest < ActionDispatch::IntegrationTe
 
   attr_reader :provider
 
+  test '#index' do
+    get provider_admin_backend_apis_path
+    assert_response :success
+  end
+
   test '#new' do
     get new_provider_admin_backend_api_path
     assert_response :success
@@ -24,24 +29,10 @@ class Provider::Admin::BackendApisControllerTest < ActionDispatch::IntegrationTe
     assert_response :success
   end
 
-  test '#show only accessible services' do
-    backend_api = @provider.backend_apis.last
-
-    services = FactoryBot.create_list(:simple_service, 3, account: @provider)
-    services.each { |service| service.backend_api_configs.create(backend_api: backend_api, path: '/') }
-    accessible_services = services.take(2)
-    non_accessible_service = services.last
-    non_accessible_service.update_column(:state, 'deleted')
-
-    get provider_admin_backend_api_path(backend_api)
-    accessible_services.each { |service| assert_select 'ul.listing#products_using_backend li a', text: service.name }
-    assert_select 'ul.listing#products_using_backend li a', text: non_accessible_service.name, count: 0
-  end
-
   test '#create' do
     assert_difference @provider.backend_apis.method(:count) do
       backend_api_attributes = { name: 'My Backend', system_name: 'my-new-backend-api', private_endpoint: 'https://host.com/p' }
-      post provider_admin_backend_apis_path(backend_api: backend_api_attributes)
+      post provider_admin_backend_apis_path, params: { backend_api: backend_api_attributes }
     end
     assert_response :redirect
     assert_equal 'https://host.com:443/p', @provider.backend_apis.last.private_endpoint
@@ -56,17 +47,17 @@ class Provider::Admin::BackendApisControllerTest < ActionDispatch::IntegrationTe
   test '#update' do
     backend_api = @provider.backend_apis.last
     assert_equal 'http://api.example.net:80', backend_api.private_endpoint
-    put provider_admin_backend_api_path(backend_api, { backend_api: { private_endpoint: 'https://new-endpoint.com/p' } })
+    put provider_admin_backend_api_path(backend_api), params: { backend_api: { private_endpoint: 'https://new-endpoint.com/p' } }
     assert_response :redirect
     assert_equal 'https://new-endpoint.com:443/p', backend_api.reload.private_endpoint
   end
 
   test 'system_name can be created but not updated' do
-    post provider_admin_backend_apis_path, { backend_api: {name: 'My Backend', system_name: 'first-system-name', private_endpoint: 'https://endpoint.com/p'} }
+    post provider_admin_backend_apis_path, params: { backend_api: {name: 'My Backend', system_name: 'first-system-name', private_endpoint: 'https://endpoint.com/p'} }
     backend_api = provider.backend_apis.last!
     assert_equal 'first-system-name', backend_api.system_name
 
-    put provider_admin_backend_api_path(backend_api, { backend_api: {name: 'My Backend', system_name: 'my-new-backend-api'} })
+    put provider_admin_backend_api_path(backend_api), params: { backend_api: {name: 'My Backend', system_name: 'my-new-backend-api'} }
     assert_equal 'first-system-name', backend_api.reload.system_name
   end
 
@@ -75,7 +66,7 @@ class Provider::Admin::BackendApisControllerTest < ActionDispatch::IntegrationTe
     backend_api.backend_api_configs.delete_all
     assert_not backend_api.backend_api_configs.any?
 
-    perform_enqueued_jobs do
+    perform_enqueued_jobs(except: SphinxIndexationWorker) do
       delete provider_admin_backend_api_path(backend_api)
       assert_redirected_to provider_admin_dashboard_path
       assert_not BackendApi.exists? backend_api.id
@@ -87,10 +78,66 @@ class Provider::Admin::BackendApisControllerTest < ActionDispatch::IntegrationTe
     backend_api = @provider.backend_apis.order(:id).first!
     assert backend_api.backend_api_configs.any?
 
-    perform_enqueued_jobs do
+    perform_enqueued_jobs(except: SphinxIndexationWorker) do
       delete provider_admin_backend_api_path(backend_api)
       assert backend_api.reload.published?
       assert_equal 'cannot be deleted because it is used by at least one Product', flash[:error]
     end
+  end
+
+  test 'xss' do
+    backend_api = @provider.backend_apis.last
+    backend_api.update_column(:description, "<script>alert('XSS')</script>")
+    get provider_admin_backend_api_path(backend_api)
+    page = Nokogiri::HTML::Document.parse(response.body)
+    assert_equal "<script>alert('XSS')</script>", page.xpath("//dt[text() = 'Description']/following-sibling::dd").first.text
+  end
+
+  test 'member permissions' do
+    backend_api = FactoryBot.create(:backend_api, account: provider)
+    member = FactoryBot.create(:member, account: provider)
+    member.activate!
+
+    logout! && login!(provider, user: member)
+
+    get new_provider_admin_backend_api_path
+    assert_response :forbidden
+
+    backend_api_attributes = { name: 'My Backend', system_name: 'my-new-backend-api', private_endpoint: 'https://host.com/p' }
+    post provider_admin_backend_apis_path, params: { backend_api: backend_api_attributes }
+    assert_response :forbidden
+
+    get provider_admin_backend_api_path(backend_api)
+    assert_response :forbidden
+
+    get edit_provider_admin_backend_api_path(backend_api)
+    assert_response :forbidden
+
+    put provider_admin_backend_api_path(backend_api), params: { backend_api: backend_api_attributes.merge(description: 'New desc') }
+    assert_response :forbidden
+
+    delete provider_admin_backend_api_path(backend_api)
+    assert_response :forbidden
+
+    member.admin_sections = %w[plans]
+    member.save!
+
+    get new_provider_admin_backend_api_path
+    assert_response :forbidden
+
+    post provider_admin_backend_apis_path, params: { backend_api: backend_api_attributes }
+    assert_response :forbidden
+
+    get provider_admin_backend_api_path(backend_api)
+    assert_response :success
+
+    get edit_provider_admin_backend_api_path(backend_api)
+    assert_response :success
+
+    put provider_admin_backend_api_path(backend_api), params: { backend_api: backend_api_attributes.merge(description: 'New desc') }
+    assert_response :redirect
+
+    delete provider_admin_backend_api_path(backend_api)
+    assert_response :forbidden
   end
 end

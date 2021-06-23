@@ -98,9 +98,9 @@ class BackendApiConfigTest < ActiveSupport::TestCase
     end
     configs << FactoryBot.create(:backend_api_config, service: services[0])
 
-    assert_same_elements configs.values_at(0, -1).map(&:id), BackendApiConfig.by_service(services[0]).pluck(:id)
-    assert_equal [configs[1].id], BackendApiConfig.by_service(services[1]).pluck(:id)
-    assert_empty BackendApiConfig.by_service(services[2]).pluck(:id)
+    assert_same_elements configs.values_at(0, -1).map(&:id), BackendApiConfig.by_service(services[0].id).pluck(:id)
+    assert_equal [configs[1].id], BackendApiConfig.by_service(services[1].id).pluck(:id)
+    assert_empty BackendApiConfig.by_service(services[2].id).pluck(:id)
   end
 
   test '.by_backend_api returns the configs related to that backend_api' do
@@ -113,9 +113,9 @@ class BackendApiConfigTest < ActiveSupport::TestCase
     end
     configs << FactoryBot.create(:backend_api_config, backend_api: backend_apis[0])
 
-    assert_same_elements configs.values_at(0, -1).map(&:id), BackendApiConfig.by_backend_api(backend_apis[0]).pluck(:id)
-    assert_equal [configs[1].id], BackendApiConfig.by_backend_api(backend_apis[1]).pluck(:id)
-    assert_empty BackendApiConfig.by_backend_api(backend_apis[2]).pluck(:id)
+    assert_same_elements configs.values_at(0, -1).map(&:id), BackendApiConfig.by_backend_api(backend_apis[0].id).pluck(:id)
+    assert_equal [configs[1].id], BackendApiConfig.by_backend_api(backend_apis[1].id).pluck(:id)
+    assert_empty BackendApiConfig.by_backend_api(backend_apis[2].id).pluck(:id)
   end
 
   test 'accessible' do
@@ -131,16 +131,41 @@ class BackendApiConfigTest < ActiveSupport::TestCase
   class ProxyConfigAffectingChangesTest < ActiveSupport::TestCase
     disable_transactional_fixtures!
 
-    test 'proxy config affecting changes' do
-      backend_api = FactoryBot.create(:backend_api)
-      product = FactoryBot.create(:simple_service, account: backend_api.account)
-      backend_api_config = product.backend_api_configs.build(backend_api: backend_api, path: '/')
+    setup do
+      provider = FactoryBot.create(:provider_account)
+      @service = provider.first_service
+      @backend_api = FactoryBot.create(:backend_api, account: provider)
+    end
 
-      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(product.proxy, backend_api_config).times(3)
+    attr_reader :service, :backend_api
 
-      backend_api_config.save!
-      backend_api_config.update_attributes(path: '/a-path')
-      backend_api_config.destroy!
+    test 'tracks changes on create' do
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        backend_api_config = FactoryBot.create(:backend_api_config, backend_api: backend_api, service: service, path: '/whatever')
+        assert tracker.tracking?(ProxyConfigAffectingChanges::TrackedObject.new(backend_api_config))
+      end
+    end
+
+    test 'tracks changes on update' do
+      backend_api_config = FactoryBot.create(:backend_api_config, backend_api: backend_api, service: service, path: '/whatever')
+      tracked_object = ProxyConfigAffectingChanges::TrackedObject.new(backend_api_config)
+
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        refute tracker.tracking?(tracked_object)
+        backend_api_config.update(path: '/new-path')
+        assert tracker.tracking?(tracked_object)
+      end
+    end
+
+    test 'tracks changes on destroy' do
+      backend_api_config = FactoryBot.create(:backend_api_config, backend_api: backend_api, service: service, path: '/whatever')
+      tracked_object = ProxyConfigAffectingChanges::TrackedObject.new(backend_api_config)
+
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        refute tracker.tracking?(tracked_object)
+        backend_api_config.destroy
+        assert tracker.tracking?(tracked_object)
+      end
     end
   end
 end

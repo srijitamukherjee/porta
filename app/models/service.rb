@@ -1,22 +1,36 @@
+# frozen_string_literal: true
+
 require 'backend_client'
 
 class Service < ApplicationRecord
+  include Searchable
   include Backend::ModelExtensions::Service
   include Logic::Contracting::Service
   include Logic::PlanChanges::Service
-  include Logic::EndUsers::Service
   include Logic::Authentication::Service
   include Logic::RollingUpdates::Service
   include BackendApiLogic::ServiceExtension
   include SystemName
   extend System::Database::Scopes::IdOrSystemName
   include ServiceDiscovery::ModelExtensions::Service
+  include ProxyConfigAffectingChanges::ModelExtension
 
-  DELETE_STATE = 'deleted'.freeze
+  define_proxy_config_affecting_attributes :backend_version
+
+  self.background_deletion = [
+    :service_plans,
+    :application_plans,
+    [:api_docs_services, class_name: 'ApiDocs::Service'],
+    :backend_api_configs,
+    :metrics,
+    [:proxy, { action: :destroy, has_many: false }]
+  ].freeze
+
+  DELETE_STATE = 'deleted'
 
   has_system_name uniqueness_scope: :account_id
 
-  attr_readonly :system_name, :admin_support_email, :tech_support_email
+  attr_readonly :system_name
 
   validates :backend_version, inclusion: { in: ->(service) { BackendVersion.usable_versions(service: service) }}
 
@@ -43,21 +57,15 @@ class Service < ApplicationRecord
   with_options(dependent: :destroy, inverse_of: :service) do |service|
     service.has_many :service_plans, as: :issuer, &DefaultPlanProxy
     service.has_many :application_plans, as: :issuer, &DefaultPlanProxy
-    service.has_many :end_user_plans, &DefaultPlanProxy
     service.has_many :api_docs_services, class_name: 'ApiDocs::Service'
   end
 
-  def self.columns
-    super.reject { |column| %w[act_as_product tech_support_email admin_support_email].include?(column.name) }
-  end
-
-  scope :of_account, ->(account) { where.has { account_id == account } }
+  scope :of_account, ->(account) { where.has { account_id == account.id } }
 
   has_one :proxy, dependent: :destroy, inverse_of: :service, autosave: true
 
   belongs_to :default_service_plan, class_name: 'ServicePlan'
   belongs_to :default_application_plan, class_name: 'ApplicationPlan'
-  belongs_to :default_end_user_plan, class_name: 'EndUserPlan'
 
   attr_protected :account_id, :tenant_id, :audit_ids
 
@@ -100,30 +108,20 @@ class Service < ApplicationRecord
   scope :accessible, -> { where.not(state: DELETE_STATE) }
   scope :deleted, -> { where(state: DELETE_STATE) }
   scope :of_approved_accounts, -> { joins(:account).merge(Account.approved) }
-  scope :permitted_for_user, ->(user) do
-    # TODO: this is probably wrong...
-    # how come if it does not have access_to_all_services but it can not use service_permissions,
-    # then we allow them all?!!
-    # but this is keeping the same behaviour that it previously had
-    if user.forbidden_some_services?
-      where({id: user.member_permission_service_ids})
-    else
-      all
-    end
-  end
+  scope :permitted_for, ->(user = nil) {
+    next all unless user
 
-  validates :credit_card_support_email, format: { with: /.+@.+\..+/, allow_blank: true }
+    account = user.account
+    account_services = (account.provider? ? account : account.provider_account).services
+    account_services.merge(user.forbidden_some_services? ? where(id: user.member_permission_service_ids) : {})
+  }
 
   validates :name, presence: true
 
-  validates :default_end_user_plan, presence: { unless: :end_user_registration_required? }
-  validates :name, :logo_file_name, :logo_content_type, :state, :draft_name,
-            :credit_card_support_email,
+  validates :name, :logo_file_name, :logo_content_type, :state,
             :buyer_plan_change_permission, :system_name, :backend_version, :support_email, :deployment_option,
             length: { maximum: 255 }
-  validates :infobar, :terms, :notification_settings, :oneline_description, :description,
-            :txt_api, :txt_support, :txt_features,
-            length: { maximum: 65535 }
+  validates :terms, :notification_settings, :description, :txt_support, length: { maximum: 65535 }
 
   accepts_nested_attributes_for :proxy
 
@@ -138,7 +136,7 @@ class Service < ApplicationRecord
     private_constant :SERVICE_MESH
 
     def self.plugins
-      PLUGINS.map { |lang| "plugin_#{lang}".freeze }
+      PLUGINS.map { |lang| "plugin_#{lang}" }
     end
 
     def self.gateways
@@ -146,7 +144,7 @@ class Service < ApplicationRecord
     end
 
     def self.service_mesh
-      SERVICE_MESH.map { |name| "service_mesh_#{name}".freeze }
+      SERVICE_MESH.map { |name| "service_mesh_#{name}" }
     end
 
     def self.all
@@ -157,7 +155,6 @@ class Service < ApplicationRecord
   validates :deployment_option, inclusion: { in: DeploymentOption.all }, presence: true
   scope :deployed_with_gateway, -> { where(deployment_option: DeploymentOption.gateways) }
 
-  validate :end_users_switch
   serialize :notification_settings
 
   audited allow_mass_assignment: true
@@ -200,6 +197,10 @@ class Service < ApplicationRecord
 
     before_transition to: [:deleted], do: :deleted_by_state_machine
     after_transition to: [:deleted], do: :notify_deletion
+  end
+
+  def accessible?
+    state != DELETE_STATE
   end
 
   def using_proxy_pro?
@@ -264,15 +265,9 @@ class Service < ApplicationRecord
     application_plans.published
   end
 
-  # use this method to destroy the default service with all callbacks firing
-  def destroy_default
-    @destroy_default_allowed = true
-    destroy
-  end
-
   def stop_destroy_if_last_or_default
     return if destroyable?
-    errors.add :base, 'This service cannot be removed'
+    errors.add :base, 'This product cannot be removed'
     false
   end
 
@@ -323,6 +318,10 @@ class Service < ApplicationRecord
   # Only those metrics that are methods.
   def method_metrics
     metrics.find_by(system_name: 'hits')&.children || metrics.none
+  end
+
+  def top_level_metrics
+    metrics.top_level
   end
 
   # Does this service has metric "hits" with submetrics (methods) defined?
@@ -382,8 +381,6 @@ class Service < ApplicationRecord
 
       xml.deployment_option deployment_option
       xml.support_email support_email
-
-      xml.end_user_registration_required end_user_registration_required
 
       metrics.to_xml(builder: xml, root: 'metrics')
     end
@@ -501,7 +498,7 @@ class Service < ApplicationRecord
     (proxy || build_proxy).authentication_method = backend_version
 
     if oidc?
-      super('oauth'.freeze)
+      super('oauth')
     else
       super(backend_version)
     end
@@ -521,6 +518,15 @@ class Service < ApplicationRecord
     proxy.apicast_configuration_driven && !proxy.service_mesh_integration?
   end
 
+  # TODO: Remove this when no one use plugins
+  def plugin_deployment?
+    DeploymentOption.plugins.include?(deployment_option)
+  end
+
+  def create_default_proxy
+    create_proxy! unless proxy
+  end
+
   private
 
   def archive_as_deleted
@@ -538,12 +544,7 @@ class Service < ApplicationRecord
   end
 
   def destroyable?
-    return true if destroyed_by_association
-    !default_or_last? || @destroy_default_allowed
-  end
-
-  def create_default_proxy
-    create_proxy! unless proxy
+    destroyed_by_association || !default_or_last?
   end
 
   def create_default_service_plan
@@ -553,7 +554,7 @@ class Service < ApplicationRecord
   def default_service_plan_state
     return unless account && account.provider_can_use?(:published_service_plan_signup)
     return if account.should_be_deleted?
-    account.settings.service_plans_ui_visible? ? 'hidden'.freeze : 'published'.freeze
+    account.settings.service_plans_ui_visible? ? 'hidden' : 'published'
   end
 
   def update_notification_settings
@@ -575,15 +576,6 @@ class Service < ApplicationRecord
 
   def notification_settings_levels
     (notification_settings || {}).map { |_key, values| values }.flatten.uniq
-  end
-
-  def end_users_switch
-    return unless account.try!(:settings)
-    switch = account.settings.end_users
-
-    if !end_user_registration_required && !switch.allowed?
-      errors.add(:end_user_registration_required, :not_allowed)
-    end
   end
 
   def alert_limits

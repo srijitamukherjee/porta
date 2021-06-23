@@ -2,14 +2,12 @@ require 'test_helper'
 
 class ContractTest < ActiveSupport::TestCase
 
-  disable_transactional_fixtures!
-
   def test_by_account
     accounts = [FactoryBot.create(:simple_buyer), FactoryBot.create(:simple_provider)]
     accounts.each { |account| FactoryBot.create_list(:application, 2, user_account: account) }
 
     assert_same_elements Contract.where(user_account: accounts[0].id).pluck(:id), Contract.by_account(accounts[0].id).pluck(:id)
-    assert_same_elements Contract.where(user_account: accounts[1].id).pluck(:id), Contract.by_account(accounts[1]).pluck(:id)
+    assert_same_elements Contract.where(user_account: accounts[1].id).pluck(:id), Contract.by_account(accounts[1].id).pluck(:id)
   end
 
   def test_have_paid_on
@@ -36,7 +34,7 @@ class ContractTest < ActiveSupport::TestCase
 
   def test_plan_changed_is_notified_after_commit
     plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
-    contract = FactoryBot.create(:contract, :plan => plan)
+    contract = FactoryBot.create(:account_contract, :plan => plan)
 
     other_plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
 
@@ -53,7 +51,7 @@ class ContractTest < ActiveSupport::TestCase
 
   def test_plan_changed_is_notified_just_once
     plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
-    contract = FactoryBot.create(:contract, :plan => plan)
+    contract = FactoryBot.create(:account_contract, :plan => plan)
 
     ## explicit transaction
     other_plan = FactoryBot.create(:account_plan, :issuer => FactoryBot.create(:simple_account))
@@ -67,7 +65,7 @@ class ContractTest < ActiveSupport::TestCase
     end
 
     ## just save
-    other_contract = FactoryBot.create(:contract, :plan => plan)
+    other_contract = FactoryBot.create(:account_contract, :plan => plan)
 
     other_contract.expects(:notify_observers).with(:plan_changed).once
     other_contract.expects(:notify_observers).with(:bill_variable_for_plan_changed, kind_of(Plan)).once
@@ -108,6 +106,18 @@ class ContractTest < ActiveSupport::TestCase
     end
   end #paid?
 
+  test '.permitted_for' do
+    cinstances = FactoryBot.create_list(:simple_cinstance, 2)
+    user = FactoryBot.build(:member)
+
+    user.stubs(forbidden_some_services?: false)
+    permitted_contract_ids = Contract.permitted_for(user).pluck(:id)
+    cinstances.each { |contract| assert_includes(permitted_contract_ids, contract.id) }
+
+    user.stubs(forbidden_some_services?: true)
+    user.stubs(member_permission_service_ids: [cinstances.first.service_id])
+    assert_equal [cinstances.first.id], Contract.permitted_for(user).pluck(:id)
+  end
 
   def test_bill_for
     invoice = FactoryBot.create(:invoice)
@@ -117,7 +127,8 @@ class ContractTest < ActiveSupport::TestCase
 
     contract.bill_for(month, invoice)
 
-    assert_equal month.end.to_time.end_of_day, contract.paid_until
+    # Because DB value do not have fraction of seconds but Time.zone.now does
+    assert_in_delta month.end.to_time.end_of_day, contract.paid_until, 1.second
   end
 
   def test_billable
@@ -144,7 +155,6 @@ class ContractTest < ActiveSupport::TestCase
     Timecop.freeze(Date.parse('2018-01-17')) do
       provider = FactoryBot.create(:simple_provider)
       contract = FactoryBot.create(:simple_cinstance, trial_period_expires_at: nil)
-      contract.buyer_account.stubs(provider_account: provider)
       other_plan = FactoryBot.create(:simple_application_plan, service: contract.service, cost_per_month: 3100.0)
       Finance::PrepaidBillingStrategy.create!(account: provider, currency: 'EUR')
 
@@ -178,5 +188,19 @@ class ContractTest < ActiveSupport::TestCase
 
       refute contract.can_change_plan?(nil)
     end
+  end
+
+  test 'destroy customized plan callback only runs when the plan is not scheduled for deletion' do
+    original_plan = FactoryBot.create(:simple_application_plan)
+    plan_async_deletion, plan_sync_deletion = FactoryBot.create_list(:simple_application_plan, 2, original: original_plan)
+    plan_async_deletion.service.update_column(:state, :deleted)
+    contract_async_deletion, contract_sync_deletion = [plan_async_deletion.reload, plan_sync_deletion].map do |plan|
+      FactoryBot.create(:simple_cinstance, plan: plan)
+    end
+
+    [contract_async_deletion, contract_sync_deletion].each(&:destroy!)
+
+    assert Plan.exists?(plan_async_deletion.id)
+    refute Plan.exists?(plan_sync_deletion.id)
   end
 end

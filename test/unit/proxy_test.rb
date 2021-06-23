@@ -25,6 +25,14 @@ class ProxyTest < ActiveSupport::TestCase
       assert_match 'configuration can\'t be blank', proxy.errors.full_messages.to_sentence
     end
 
+    def test_not_valid_json_policies_config
+      service = FactoryBot.create(:simple_service)
+      proxy = Proxy.new(policies_config: 'not-valid-json', service: service)
+      refute proxy.valid?
+
+      assert_match 'Policies config has invalid format. The Correct format is:', proxy.errors.full_messages.to_sentence
+    end
+
     def test_policies_config
       proxy = Proxy.new(policies_config: "[{\"data\":{\"request\":\"1\",\"config\":\"123\"}}]")
       assert_equal proxy.policies_config.first, { "data" => { "request" => "1", "config" => "123" }}
@@ -82,6 +90,7 @@ class ProxyTest < ActiveSupport::TestCase
       service = FactoryBot.create(:simple_service, :with_default_backend_api, account: account)
       null_backend_api = FactoryBot.create(:backend_api, account: account, private_endpoint: 'https://foo.baz')
       null_backend_api.update_columns(private_endpoint: '')
+      backend_api0 = service.backend_apis.first
       backend_api1 = FactoryBot.create(:backend_api, account: account, private_endpoint: 'https://private-1.example.com')
       backend_api2 = FactoryBot.create(:backend_api, account: account, private_endpoint: 'https://private-2.example.com')
       FactoryBot.create(:backend_api_config, path: '/null', backend_api: null_backend_api, service: service)
@@ -91,9 +100,9 @@ class ProxyTest < ActiveSupport::TestCase
         {"name"=>"routing", "version"=>"builtin", "enabled"=>true,
           "configuration"=>{
             "rules"=>[
-              {"url"=>"https://private-2.example.com:443", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"/foo/bar/.*|/foo/bar/?"}]}, 'replace_path'=>"{{original_request.path | remove_first: '/foo/bar'}}"},
-              {"url"=>"https://private-1.example.com:443", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"/foo/.*|/foo/?"}]}, 'replace_path'=>"{{original_request.path | remove_first: '/foo'}}"},
-              {"url"=>"https://echo-api.3scale.net:443", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"/.*"}]}}
+              {"url"=>"https://private-2.example.com:443", "owner_id"=>backend_api2.id, "owner_type" => "BackendApi", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"^(/foo/bar/.*|/foo/bar/?)"}]}, 'replace_path'=>"{{uri | remove_first: '/foo/bar'}}"},
+              {"url"=>"https://private-1.example.com:443", "owner_id"=>backend_api1.id, "owner_type" => "BackendApi", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"^(/foo/.*|/foo/?)"}]}, 'replace_path'=>"{{uri | remove_first: '/foo'}}"},
+              {"url"=>"https://echo-api.3scale.net:443", "owner_id"=>backend_api0.id, "owner_type" => "BackendApi", "condition"=>{"operations"=>[{"match"=>"path", "op"=>"matches", "value"=>"^(/.*)"}]}}
             ]
           }
         },
@@ -159,6 +168,19 @@ class ProxyTest < ActiveSupport::TestCase
       assert proxy.production_endpoint
     end
 
+    test 'generates shortened URI label endpoints' do
+      service = FactoryBot.create(:simple_service, deployment_option: 'hosted', system_name: 'long-system-name-that-will-cause-invalid-host', proxy: nil)
+
+      proxy_config = System::Application.config.three_scale.sandbox_proxy
+      proxy_config.expects(:fetch).with(:port).at_least_once.returns('8080')
+      proxy_config.expects(:fetch).with(:apicast_staging_endpoint).at_least_once.returns('http://%{system_name}-needs-to-be-63-chars-or-shorter.staging.apicast.dev:8080')
+      proxy_config.expects(:fetch).with(:apicast_production_endpoint).at_least_once.returns('http://%{system_name}-needs-to-be-63-chars-or-shorter.production.apicast.dev:8080')
+
+      proxy = FactoryBot.create(:proxy, service: service, apicast_configuration_driven: true)
+      assert_equal 'http://long-system-name-that-will-cause-invalid-host-needs-to-4207987.staging.apicast.dev:8080', proxy.sandbox_endpoint
+      assert_equal 'http://long-system-name-that-will-cause-invalid-host-needs-to-4207987.production.apicast.dev:8080', proxy.endpoint
+    end
+
     def test_deployable
       assert_predicate Service.new(deployment_option: 'hosted').build_proxy, :deployable?
       assert_predicate Service.new(deployment_option: 'self_managed').build_proxy, :deployable?
@@ -183,27 +205,6 @@ class ProxyTest < ActiveSupport::TestCase
     assert @proxy.apicast_configuration_driven
   end
 
-
-  def test_deploy_service_mesh_integration
-    @proxy.provider.stubs(:provider_can_use?).with(:apicast_v1).returns(true)
-    @proxy.provider.stubs(:provider_can_use?).with(:apicast_v2).returns(true)
-    @proxy.provider.stubs(:provider_can_use?).with(:service_mesh_integration).returns(true)
-    @proxy.stubs(:deployment_option).returns('service_mesh_istio')
-    @proxy.expects(:deploy_v2).returns(true)
-    @proxy.expects(:deploy_production_v2).returns(true)
-    assert @proxy.deploy!
-  end
-
-  def test_deploy_production
-    @proxy.assign_attributes(apicast_configuration_driven: true)
-    @proxy.expects(:deploy_production_v2)
-    @proxy.deploy_production
-
-    @proxy.assign_attributes(apicast_configuration_driven: false, api_test_success: true)
-    @account.expects(:deploy_production_apicast)
-    @proxy.deploy_production
-  end
-
   test 'hosts' do
     @proxy.endpoint = 'http://foobar.example.com:3000/path'
     @proxy.sandbox_endpoint = 'http://example.com:8080'
@@ -226,6 +227,44 @@ class ProxyTest < ActiveSupport::TestCase
     @proxy.sandbox_endpoint = 'http://example.com'
 
     assert_equal %w(localhost example.com), @proxy.hosts
+  end
+
+  test 'hosts comply with rfc 1035' do
+    @proxy.endpoint = 'http://this-hostname-label-is-longer-than-63-chars-which-is-not-allowed-according-to-rfc-1035.com:3000'
+    @proxy.sandbox_endpoint = 'http://short-labels-are-ok.com:8080'
+    refute @proxy.valid?
+    assert @proxy.errors[:endpoint].any?
+    assert_match /is too long for one or more labels of the host \(maximum is 63 characters\)/, @proxy.errors[:endpoint].to_sentence
+    assert_not_match /the accepted format is/, @proxy.errors[:endpoint].to_sentence
+    refute @proxy.errors[:sandbox_endpoint].any?
+
+    @proxy.endpoint = 'http://short-labels-are-ok.com:8080'
+    @proxy.sandbox_endpoint = 'http://this-hostname-label-is-longer-than-63-chars-which-is-not-allowed-according-to-rfc-1035.com:3000'
+    refute @proxy.valid?
+    assert @proxy.errors[:sandbox_endpoint].any?
+    assert_match /is too long for one or more labels of the host \(maximum is 63 characters\)/, @proxy.errors[:sandbox_endpoint].to_sentence
+    assert_not_match /the accepted format is/, @proxy.errors[:endpoint].to_sentence
+    refute @proxy.errors[:endpoint].any?
+  end
+
+  test 'hostname_rewrite validates a host that complies with rfc 2616' do
+    @proxy.hostname_rewrite = 'my-own.api.example.net'
+    assert @proxy.valid?
+
+    @proxy.hostname_rewrite = 'my-own.api.example.net:8080'
+    assert @proxy.valid?
+
+    @proxy.hostname_rewrite = 'my-own.api.example.net:80'
+    assert @proxy.valid?
+
+    @proxy.hostname_rewrite = 'my-own.api.example.net:'
+    refute @proxy.valid?
+
+    @proxy.hostname_rewrite = 'my-own.api.example.net:hello'
+    refute @proxy.valid?
+
+    @proxy.hostname_rewrite = 'my-own.api.example.net::80'
+    refute @proxy.valid?
   end
 
   test 'backend' do
@@ -255,7 +294,6 @@ class ProxyTest < ActiveSupport::TestCase
     @account.stubs(:provider_can_use?).with(:apicast_v1).returns(true)
     @account.stubs(:provider_can_use?).with(:apicast_v2).returns(true)
     @account.expects(:provider_can_use?).with(:proxy_private_base_path).at_least_once.returns(false)
-    @account.expects(:provider_can_use?).with(:api_as_product).at_least_once.returns(false)
     backend_api = @proxy.backend_api
     backend_api.stubs(account: @account)
     @proxy.api_backend = 'https://example.org:3/path'
@@ -440,54 +478,19 @@ class ProxyTest < ActiveSupport::TestCase
     end
   end
 
-  test 'sandbox_deployed? when last proxy log entry says so' do
-    proxy = FactoryBot.create(:proxy, created_at: Time.now)
-    refute proxy.sandbox_deployed?
-    FactoryBot.create(:proxy_log, provider: proxy.service.account, status: 'Deployed successfully.', created_at: Time.now - 1.minute)
-    refute proxy.sandbox_deployed?
-    FactoryBot.create(:proxy_log, provider: proxy.service.account, status: 'Deployed successfully.', created_at: Time.now + 1.minute)
-    assert proxy.sandbox_deployed?
-    FactoryBot.create(:proxy_log, provider: proxy.service.account, status: 'Deploy failed.', created_at: Time.now + 2.minutes)
-    refute proxy.sandbox_deployed?
-  end
-
-  test 'send_api_test_request!' do
-    proxy = FactoryBot.create(:proxy, api_test_path: '/v1/word/stuff.json',
-                                      secret_token: '123')
-    proxy.update!(api_backend: "http://api_backend.#{ThreeScale.config.superdomain}:80",
-                                      sandbox_endpoint: 'http://proxy:80')
-    stub_request(:get, 'http://proxy/v1/word/stuff.json?user_key=USER_KEY')
-        .to_return(status: 201, body: '', headers: {})
-
-    analytics.expects(:track).with('Sandbox Proxy Test Request', has_entries(success: true, uri: 'http://proxy/v1/word/stuff.json', status: 201))
-    assert proxy.send_api_test_request!
-  end
-
-  test 'send_api_test_request! with oauth' do
-    proxy = FactoryBot.create(:proxy,
-                                      api_backend: "http://api_backend.#{ThreeScale.config.superdomain}:80",
-                                      sandbox_endpoint: 'http://proxy:80',
-                                      api_test_path: '/v1/word/stuff.json',
-                                      secret_token: '123')
-    proxy.service.backend_version = 'oauth'
-    proxy.api_test_success = true
-    proxy.send_api_test_request!
-
-    assert_nil proxy.api_test_success
-  end
-
   test 'save_and_deploy' do
     proxy = FactoryBot.build(:proxy,
                               api_backend: 'http://example.com',
                               api_test_path: '/path',
                               apicast_configuration_driven: false)
-    ::ProviderProxyDeploymentService.any_instance.expects(:deploy).with(proxy).returns(true)
+    ::ApicastV1DeploymentService.any_instance.expects(:deploy).with(proxy).returns(true)
 
     analytics.expects(:track).with('Sandbox Proxy Deploy', success: true)
     analytics.expects(:track).with('Sandbox Proxy updated',
                                    api_backend: 'http://example.com:80',
                                    api_test_path: '/path',
                                    success: true)
+    analytics.expects(:track).with('APIcast Hosted Version Change', {enabled: false, service_id: proxy.service_id, deployment_option: 'hosted'})
     Logic::RollingUpdates.stubs(skipped?: true)
 
     assert proxy.save_and_deploy
@@ -608,24 +611,27 @@ class ProxyTest < ActiveSupport::TestCase
   end
 
   test 'affecting change' do
-    refute ProxyConfigAffectingChange.find_by(proxy_id: @proxy.id)
-    @proxy.affecting_change_history
-    assert ProxyConfigAffectingChange.find_by(proxy_id: @proxy.id)
+    proxy = FactoryBot.create(:simple_proxy)
+    assert ProxyConfigAffectingChange.find_by(proxy_id: proxy.id)
+
+    assert_no_change(of: -> { ProxyConfigAffectingChange.where(proxy_id: proxy.id).count }) do
+      proxy.affecting_change_history
+    end
   end
 
   test '#pending_affecting_changes?' do
-    proxy = FactoryBot.create(:simple_proxy, api_backend: nil)
+    proxy = FactoryBot.create(:simple_proxy)
     proxy.affecting_change_history.touch
 
     # no existing config for staging (sandbox)
     refute proxy.pending_affecting_changes?
 
+    FactoryBot.create(:proxy_config, proxy: proxy, environment: :sandbox)
+
+    # latest config is ahead of affecting change record
+    refute proxy.pending_affecting_changes?
+
     Timecop.travel(1.second.from_now) do
-      FactoryBot.create(:proxy_config, proxy: proxy, environment: :sandbox)
-
-      # latest config is ahead of affecting change record
-      refute proxy.pending_affecting_changes?
-
       proxy.affecting_change_history.touch
 
       # latest config is behind of affecting change record
@@ -642,7 +648,9 @@ class ProxyTest < ActiveSupport::TestCase
     end
 
     service = FactoryBot.create(:simple_service)
-    proxy = ProxyWithFiber.find(service.proxy.id)
+    proxy_id = service.proxy.id
+    proxy = ProxyWithFiber.find(proxy_id)
+    ProxyConfigAffectingChange.where(proxy_id: proxy_id).delete_all
 
     f1 = Fiber.new { proxy.affecting_change_history }
     f2 = Fiber.new { proxy.affecting_change_history }
@@ -659,27 +667,122 @@ class ProxyTest < ActiveSupport::TestCase
   class ProxyConfigAffectingChangesTest < ActiveSupport::TestCase
     disable_transactional_fixtures!
 
-    test 'proxy config affecting changes on create' do
-      proxy = FactoryBot.build(:simple_proxy, api_backend: nil)
-      # Proxy creation itself is not an affecting change...
-      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(proxy, proxy).never
-      # ...but creation of first default proxy rule ('/') is
-      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(proxy, instance_of(ProxyRule))
-      proxy.save!
+    setup do
+      @provider = FactoryBot.create(:provider_account)
+      @service = @provider.first_service
     end
 
-    test 'proxy config affecting changes on update' do
-      provider = FactoryBot.create(:simple_provider)
-      service = FactoryBot.create(:simple_service, account: provider)
-      proxy = service.proxy
+    attr_reader :provider, :service
 
-      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(proxy, proxy).twice
+    test 'does not track changes on build' do
+      service.proxy.delete
 
-      proxy.update_attributes(policies_config: [{ name: '1', version: 'b', configuration: {} }])
-      proxy.update_attributes(deployed_at: Time.utc(2019, 9, 26, 12, 20))
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        proxy = FactoryBot.build(:simple_proxy, service: service)
+        tracked_object = ProxyConfigAffectingChanges::TrackedObject.new(proxy)
+        assert tracker.tracking?(tracked_object)
+        tracker.expects(:issue_proxy_affecting_change_event).with(proxy).never
+        tracker.flush
+      end
+    end
 
-      # A stale update is not an affecting change
-      proxy.update_attributes(updated_at: Time.utc(2019, 9, 26, 12, 20))
+    test 'tracks changes on create' do
+      service.proxy.delete
+
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        proxy = FactoryBot.create(:simple_proxy, service: service)
+        tracked_object = ProxyConfigAffectingChanges::TrackedObject.new(proxy)
+        assert tracker.tracking?(tracked_object)
+        tracker.expects(:issue_proxy_affecting_change_event).with(proxy).once
+        tracker.flush
+      end
+    end
+
+    test 'does not track changes on all attributes' do
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        proxy = FactoryBot.create(:simple_proxy)
+        tracker.flush
+        tracked_object = ProxyConfigAffectingChanges::TrackedObject.new(proxy)
+        refute tracker.tracking?(tracked_object)
+
+        tracked_changes = {
+          endpoint: 'https://new-endpoint.test',
+          sandbox_endpoint: '',
+          deployed_at: 10.minutes.ago,
+          auth_app_key: 'new-app-key',
+          auth_app_id: 'new-app-id',
+          auth_user_key: 'new-user-key',
+          credentials_location: 'headers',
+          error_status_auth_failed: 400,
+          error_auth_failed: 'Bad auth',
+          error_headers_auth_failed: 'text/html',
+          error_status_auth_missing: 400,
+          error_auth_missing: 'Missing params',
+          error_headers_auth_missing: 'text/html',
+          error_status_no_match: 400,
+          error_no_match: 'Not Found',
+          error_headers_no_match: 'text/html',
+          error_status_limits_exceeded: 400,
+          error_limits_exceeded: 'Out of limit',
+          error_headers_limits_exceeded: 'text/html',
+          secret_token: 'new-token',
+          hostname_rewrite: 'echo-api.3scale.net',
+          oauth_login_url: 'http://oidc-server/login',
+          oidc_issuer_endpoint: 'http://oidc-server/auth/realm',
+          authentication_method: 'oidc',
+          policies_config: '[{"name":"alaska","version":"1","configuration":{}}]'
+        }
+
+        proxy.update(tracked_changes)
+        assert tracker.tracking?(tracked_object)
+
+        tracker.flush
+
+        untracked_changes = {
+          lock_version: 2,
+          api_test_path: '/new-path',
+          api_test_success: !!!proxy.api_test_success
+        }
+
+        untracked_changes.each do |attr_name, value|
+          proxy[attr_name] = value
+          refute tracker.tracking?(tracked_object)
+          proxy.reload
+          tracker.flush
+        end
+      end
+    end
+
+    test 'tracks changes on destroy' do
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        proxy = FactoryBot.create(:simple_proxy)
+        tracker.flush
+
+        proxy.expects(:track_proxy_affecting_changes).once
+        proxy.destroy
+      end
+    end
+  end
+
+  class StaleObjectErrorTest < ActiveSupport::TestCase
+    test 'proxy does not raise stale object error on concurrent touch' do
+      class ProxyWithFiber < ::Proxy
+        def update_attributes(*)
+          Fiber.yield
+          super
+        end
+      end
+
+      proxy_id = FactoryBot.create(:proxy).id
+
+      fiber_update = Fiber.new { ProxyWithFiber.find(proxy_id).update_attributes(error_auth_failed: 'new auth error msg') }
+      fiber_touch = Fiber.new { Proxy.find(proxy_id).touch }
+
+      fiber_update.resume
+      assert_nothing_raised(ActiveRecord::StaleObjectError) do
+        fiber_touch.resume
+        fiber_update.resume
+      end
     end
   end
 end

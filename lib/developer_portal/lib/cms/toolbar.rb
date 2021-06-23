@@ -3,8 +3,6 @@ require 'base64'
 module CMS::Toolbar
   extend ActiveSupport::Concern
 
-  include ThreeScale::DevDomain if ThreeScale::DevDomain.enabled?
-
   included do
     prepend_before_action :handle_cms_token
     append_after_action :inject_cms_toolbar, if: :cms_toolbar_enabled?
@@ -113,7 +111,7 @@ module CMS::Toolbar
   end
 
   class View < ActionView::Base
-    include ::Rails.application.routes.url_helpers
+    include System::UrlHelpers.system_url_helpers
     include ::DeveloperPortal::CMS::ToolbarHelper
   end
 end

@@ -1,13 +1,11 @@
 - content_for :javascripts do
-  = javascript_pack_tag 'bubbles'
   = javascript_pack_tag 'services'
-  = javascript_include_tag 'vendor/jquery.tipsy.js'
 
 h1 Overview
 
 section.Section
   .SettingsBox
-    = link_to 'edit', edit_admin_service_path(@service), class: "SettingsBox-toggle"
+    = pf_link_to 'edit', edit_admin_service_path(@service), class: "SettingsBox-toggle"
     dl.SettingsBox-summary.u-dl data-state="open"
       dt.u-dl-term Name
       dd.u-dl-definition = @service.name
@@ -55,13 +53,13 @@ section class="service-widget"
               span.name
                 = alert.message
 
-      - if can? :admin, :plans
-        h2
-          '  Published
-          => link_to 'Application Plans', admin_service_application_plans_path(service), data: { bubble: 'limit' }
-          = help_bubble "application_plans-#{service.id}" do
-            |  Application plans define access policies for your API itself. This allows you to differentiate between restricted / limited usage (e.g. a testing sandbox) and production or premium usage.
-        = action_link_to :new, new_admin_service_application_plan_path(service), label: 'Create Application Plan'
+      - if can? :manage, :plans
+        .flex-row
+          h2.flex-item
+            '  Published
+            => link_to 'Application Plans', admin_service_application_plans_path(service)
+          = pf_action_link_to :new, new_admin_service_application_plan_path(service),
+            label: 'Create Application Plan', class: 'flex-item'
 
         ul.application-plans[data-hint="published"]
           = list_items_or_empty service.published_application_plans, 'There are no published application plans. Create one!' do |plan|
@@ -77,13 +75,12 @@ section class="service-widget"
           | .
 
         - if (can? :manage, :service_plans) && (current_account.settings.service_plans_ui_visible?)
-          h2
-            '  Published
-            => link_to 'Service plans', admin_service_service_plans_path(service)
-            = help_bubble "service_plans#{service.id}" do
-              |  Service plans allow you to define grades of service for each of the services (APIs) available through your developer portal. The plans allow you to define pricing per service and features available.
-          = action_link_to :new,  new_admin_service_service_plan_path(service),
-          :label => 'Create Service Plan'
+          .flex-row
+            h2.flex-item
+              '  Published
+              => link_to 'Service plans', admin_service_service_plans_path(service)
+            = pf_action_link_to :new,  new_admin_service_service_plan_path(service),
+              label: 'Create Service Plan', class: 'flex-item'
 
           ul.service-plans[data-hint="published"]
             = list_items_or_empty service.service_plans.published, 'There are no published service plans. Create one!' do |plan|
@@ -100,55 +97,19 @@ section class="service-widget"
             = pluralize service.contracts.service.size, 'contract'
             | .
 
-    - if current_user.accessible_services.empty?
-      = render 'shared/service_access'
-
-    section[name="activity"]
-
-      - if can? :manage, :monitoring
-        h2 = link_to 'Analytics', admin_service_stats_usage_path(service), :title => 'Show more stats for this service'
-        = render 'stats/inlinechart',
-                 :metrics => service.metrics.top_level
-
       - if can? :manage, :partners
         h2
-          = link_to 'Configuration', path_to_service(service), :title => 'Change integration settings for this service', data: { bubble: 'integration' }
+          = link_to 'Configuration', admin_service_integration_path(service), title: 'Change integration settings for this service'
           ' ,
-          => link_to 'Methods', admin_service_metrics_path(service),  data: { bubble: 'metric' }
+          => link_to 'Methods', admin_service_metrics_path(service)
           '  and
           =< link_to 'Settings', settings_admin_service_path(service), :title => "Edit service settings"
 
         ul.service-settings[data-hint="basics"]
-          - if service.deployment_option.present?
-            - deployment_option_phrased = t(service.proxy.deployment_option, scope: "deployment_options.phrased")
-          - unless service.has_traffic?
-            li.item.integration
-              - case service.proxy.deployment_option.presence
-              - when 'hosted'
-                p On the #{link_to( 'Integration page', edit_admin_service_integration_path(service, :anchor => 'staging') )}, add your <em>API base URL</em> to the <em>Private Base URL</em> field in the staging box and hit <strong>Update & Test</strong>. Once the staging box is green, hit <strong>Deploy</strong> in the production box and you have completed a basic integration.
-                = important_icon_link "Configure #{deployment_option_phrased}",
-                  'hdd-o', edit_admin_service_integration_path(service, :anchor => 'staging'), :class => "outline-button next"
-              - when 'self_managed'
-                p On the #{link_to( 'Integration page', edit_admin_service_integration_path(service, :anchor => 'staging') )}, add your <em>API base URL</em> to the <em>Private Base URL</em> field in the staging box and hit <strong>Update & Test</strong>. Once the staging box is green, proceed to download the NGINX config files for your On-premises NGINX reverse proxy server. Once you've added these config files to your Nginx server you have completed a basic integration.
-                = important_icon_link "Configure #{deployment_option_phrased}",
-                  'hdd-o', edit_admin_service_integration_path(service, :anchor => 'staging'), :class => "outline-button next"
-              - when 'plugin_rest'
-                p Follow the instructions on the #{link_to('Integration page', path_to_service(service))} to integrate your API using #{deployment_option_phrased} the against 3scale Service Management API endpoints.
-                = important_icon_link "Get started with #{deployment_option_phrased}",
-                  'hdd-o', path_to_service(service), :class => "outline-button next"
-              - when nil
-                p = t("deployment_options.missing")
-                = important_icon_link 'Pick a deployment option now',
-                  'hdd-o', path_to_service(service), :class => "outline-button next"
-              - else
-                p Follow the instructions on the #{link_to( 'Integration page', path_to_service(service) )} to download and install the #{deployment_option_phrased} into your codebase.
-                = important_icon_link "Get started with the #{deployment_option_phrased}",
-                  'hdd-o',path_to_service(service), :class => "outline-button next"
-
           - if service.deployment_option.present? && service.has_traffic?
             li.item
               ' Integrated through
-              strong => deployment_option_phrased
+              strong => t(service.deployment_option, scope: "deployment_options.phrased")
 
           li.item
             ' Authenticated by
@@ -165,16 +126,19 @@ section class="service-widget"
           - [:buyers_manage_keys, :buyers_manage_apps, :buyer_plan_change_permission, :buyer_can_select_plan ].map { |setting| friendly_service_setting(service, setting) }.compact.each do |setting|
             li.item
               = setting
-          - if provider_can_use?(:api_as_product)
-            li.item
-              strong> Backends
-              ' used in this product:
-              ul
-                - service.backend_apis.each do |backend_api|
-                  li = link_to backend_api.name, provider_admin_backend_api_path(backend_api)
+
+      - if current_user.accessible_services.empty?
+        = render 'shared/service_access'
+
+    section[name="activity"]
+
+      - if can? :manage, :monitoring
+        h2 = link_to 'Analytics', admin_service_stats_usage_path(service), title: 'Show more stats for this service'
+        = render 'stats/inlinechart', metrics: service.metrics.top_level
+
+      = render 'api/services/cards/backends_table', product: service
 
 javascript:
   document.addEventListener('DOMContentLoaded', function () {
-    showBubble(#{json bubbles.take(1).as_json})
     serviceInitialize()
   })

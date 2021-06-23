@@ -1,13 +1,13 @@
-FROM centos/ruby-24-centos7
+FROM quay.io/centos7/ruby-25-centos7
 
 USER root
 
 ARG BUNDLER_ENV
 ENV BUNDLER_ENV="${BUNDLER_ENV}" \
     TZ=:/etc/localtime \
-    BUNDLE_GEMFILE=gemfiles/prod/Gemfile \
+    BUNDLE_GEMFILE=Gemfile \
     BUNDLE_WITHOUT=development:test \
-    NODEJS_SCL=rh-nodejs8
+    NODEJS_SCL=rh-nodejs10
 
 WORKDIR /opt/system
 
@@ -15,14 +15,15 @@ ARG SPHINX_VERSION=2.2.11-1
 
 ADD openshift/system/sphinx-${SPHINX_VERSION}.rhel7.x86_64.rpm /tmp/sphinxsearch.rpm
 
-RUN yum -y update \
+RUN yum-config-manager --save --setopt=cbs.centos.org_repos_sclo7-rh-ruby25-rh-candidate_x86_64_os_.skip_if_unavailable=true \
+    && yum -y update \
     && yum -y install centos-release-scl-rh \
-                      ImageMagick \
-                      ImageMagick-devel \
-                      unixODBC-devel \
-                      mysql \
-                      file \
-                      rh-nodejs8 \
+              ImageMagick \
+              ImageMagick-devel \
+              unixODBC-devel \
+              mysql \
+              file \
+              rh-nodejs10 \
     && rpm -i /tmp/sphinxsearch.rpm \
     && rm /tmp/*.rpm \
     && yum install -y epel-release \
@@ -32,11 +33,10 @@ RUN yum -y update \
 # copying only the gemspec files and copying all the other files after the build
 ADD lib/developer_portal/*.gemspec lib/developer_portal/
 ADD vendor/active-docs/*.gemspec vendor/active-docs/
-ADD Gemfile.base ./
-ADD gemfiles ./gemfiles
+ADD Gemfile* ./
 ADD Rakefile ./
 
-COPY openshift/system/contrib/scl_enable /opt/system/etc/
+COPY openshift/system/contrib/scl_enable ./etc/
 
 ENV BASH_ENV=/opt/system/etc/scl_enable \
     ENV=/opt/system/etc/scl_enable \
@@ -44,16 +44,18 @@ ENV BASH_ENV=/opt/system/etc/scl_enable \
     RAILS_ENV=production \
     SAFETY_ASSURED=1
 
-RUN export ${BUNDLER_ENV} >/dev/null \
+RUN export ${BUNDLER_ENV} >/dev/null\
     && source /opt/system/etc/scl_enable \
-    && gem install bundler --version 1.17.3 \
+    && gem install bundler --version 2.2.18 \
     && bundle install --deployment --jobs $(grep -c processor /proc/cpuinfo) --retry=5
 
 RUN chgrp root /opt/system/
 
 ADD . ./
 ADD config/docker/* ./config/
-ADD package*.json ./
+ADD package.json ./
+ADD yarn.lock ./
+ADD openshift/system/config/* ./config/
 
 RUN export ${BUNDLER_ENV} >/dev/null \
     && source /opt/system/etc/scl_enable \
@@ -62,7 +64,8 @@ RUN export ${BUNDLER_ENV} >/dev/null \
     && chmod g+w -vfR log tmp public/assets db/sphinx \
     && umask 0002 \
     && cd /opt/system \
-    && npm install --no-progress \
+    && npm install -g yarn \
+    && yarn install:safe --no-progress \
     && bundle exec rake assets:precompile tmp:clear \
     && rm log/*.log \
     && chmod g+w /opt/system/config

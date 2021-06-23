@@ -3,8 +3,7 @@ module Liquid
     class Base
       attr_reader :context
 
-      #include Rails.application.routes.url_helpers
-      include DeveloperPortal::Engine.routes.url_helpers
+      include System::UrlHelpers.cms_url_helpers
 
       delegate :tag, :content_tag, to: 'Liquid::Filters::RailsHelpers'
 
@@ -54,6 +53,7 @@ module Liquid
       end
 
       def render(content)
+        # TODO: append captcha before button, not after
         content_tag(:form, metadata + content, form_options.stringify_keys.update(@html_attributes.except("class")))
       end
 

@@ -1,16 +1,19 @@
 
 class Plan < ApplicationRecord
-  include ThreeScale::Search::Scopes
+  include Searchable
   class PeriodRangeCalculationError < StandardError; end
+  include Symbolize
 
   self.allowed_sort_columns = %w[position name state contracts_count]
   self.default_sort_column = :position
   self.default_sort_direction = :asc
 
-  include ::ThreeScale::MethodTracing
 
   include SystemName
   include Logic::MetricVisibility::Plan
+
+  self.background_deletion = [:cinstances, :contracts, :plan_metrics, :pricing_rules,
+                              :usage_limits, [:customizations, { action: :destroy, class_name: 'Plan' }]]
 
   has_system_name :uniqueness_scope => [ :type, :issuer_id, :issuer_type ]
 
@@ -23,7 +26,7 @@ class Plan < ApplicationRecord
   #  - `#audit_destroy` triggered by audit_destroy
   # I think those gems are fine with their behaviour.
   # The problem is on our side with so many inter-dependent relationships
-  skip_callback :destroy, :before, :lock!, if: -> { !self.class.exists?(id) || destroyed_by_association }
+  # skip_callback :destroy, :before, :lock!, if: -> { !self.class.exists?(id) || destroyed_by_association }
   skip_callback :destroy, :before, :audit_destroy, if: -> { !self.class.exists?(id) }
 
   validates :state, inclusion: { in: %w(hidden published) }
@@ -54,8 +57,8 @@ class Plan < ApplicationRecord
 
   validates :name, presence: true
 
-  validates :setup_fee, :cost_per_month, numericality: { allow_nil: false, allow_blank: false }
-
+  validates :setup_fee, :cost_per_month, numericality: { allow_nil: false, allow_blank: false, greater_than_or_equal_to: 0.00 }
+  validates :trial_period_days, numericality: { allow_nil: true, greater_than_or_equal_to: 0 }
   validates :system_name, length: { maximum: 255 }
   validates :name, :rights, :state, :cost_aggregation_rule, :type, :issuer_type,
             length: { maximum: 255 }
@@ -439,6 +442,10 @@ class Plan < ApplicationRecord
     plan_rule ? plan_rule.switches : []
   end
 
+  def scheduled_for_deletion?
+    !issuer || issuer.deleted? || provider_account&.scheduled_for_deletion?
+  end
+
   protected
 
   def xml_builder(options, attrs = {}, extra_nodes = {})
@@ -474,6 +481,14 @@ class Plan < ApplicationRecord
   end
 
   private
+
+  # act_as_list updates the position every time that a plan is destroyed.
+  # But we do not want to do that when its issuer is going to be deleted anyway.
+  # Additionally, we cannot do: skip_callback :destroy, :after, :decrement_positions_on_lower_items, if: -> { destroyed_by_association }
+  # because it is an 'after' callback and by the time it is executed, destroyed_by_association is already 'nil'
+  def act_as_list_no_update?
+    super || scheduled_for_deletion?
+  end
 
   def plan_rule
     @plan_rule ||= PlanRulesCollection.find_for_plan(self)

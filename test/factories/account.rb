@@ -142,11 +142,8 @@ FactoryBot.define do
       account.services.first.update_attribute :mandatory_app_key, false
       account.settings.update_attributes!(
         account_plans_ui_visible: true,
-        service_plans_ui_visible: true,
-        end_user_plans_ui_visible: true
+        service_plans_ui_visible: true
       )
-      backend_api = FactoryBot.create(:backend_api, account: account, name: 'API Backend')
-      FactoryBot.create(:backend_api_config, service: account.services.first, backend_api: backend_api)
     end
   end
 
@@ -166,7 +163,7 @@ FactoryBot.define do
 
       account.stubs(:bought_cinstance).returns(bought_cinstance)
       account.stubs(:provider_account).returns(master_account)
-      Account.stubs(:find_by_provider_key).with(bought_cinstance.user_key).returns(account)
+      Account.stubs(:first_by_provider_key).with(bought_cinstance.user_key).returns(account)
     end
   end
 
@@ -177,13 +174,6 @@ FactoryBot.define do
       if account.users.reload.empty?
         username = account.org_name.gsub(/[^a-zA-Z0-9_\.]+/, '_')
         account.users << FactoryBot.create(:admin, :account_id => account.id, :username => username, :tenant_id => account.id)
-      end
-    end
-
-    trait(:with_default_backend_api) do
-      after(:create) do |account|
-        backend_api = FactoryBot.create(:backend_api, account: account)
-        FactoryBot.create(:backend_api_config, service: account.default_service, backend_api: backend_api)
       end
     end
   end

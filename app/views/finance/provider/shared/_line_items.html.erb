@@ -1,4 +1,7 @@
 <table id="line_items" class="invoice">
+  <caption>
+    Line Items
+  </caption>
   <thead>
   <tr>
     <th>Name</th>
@@ -8,7 +11,7 @@
     <th>Charged</th>
     <th>
       <% if @invoice.editable? && editable %>
-        <%= link_to 'Add',new_admin_finance_account_invoice_line_item_path(@invoice.buyer_account, @invoice),
+        <%= pf_link_to 'Add', new_admin_finance_account_invoice_line_item_path(@invoice.buyer_account, @invoice),
                     :title => 'Add Custom Charge',
                     :class => 'action add fancybox',
                     :'data-autodimensions' => 'true'

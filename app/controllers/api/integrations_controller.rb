@@ -4,8 +4,7 @@ class Api::IntegrationsController < Api::BaseController
   before_action :find_service
   before_action :find_proxy
   before_action :authorize
-  before_action :hide_for_apiap, only: :edit
-  before_action :find_registry_policies, only: %i[edit update]
+  before_action :find_registry_policies, only: :update
 
   activate_menu :serviceadmin, :integration, :configuration
   sublayout 'api/service'
@@ -14,32 +13,19 @@ class Api::IntegrationsController < Api::BaseController
 
   rescue_from ActiveRecord::StaleObjectError, with: :edit_stale
 
-  def edit
-    @latest_lua = current_account.proxy_logs.first
-    @deploying =  ThreeScale::TimedValue.get(deploying_hosted_proxy_key)
-    @ever_deployed_hosted = current_account.hosted_proxy_deployed_at.present?
-  end
-
   def settings; end
 
   def update
+    @show_presenter = Api::IntegrationsShowPresenter.new(@proxy)
+
     if @service.using_proxy_pro? && !@proxy.apicast_configuration_driven
       proxy_pro_update
     elsif @proxy.save_and_deploy(proxy_params)
       environment = @proxy.service_mesh_integration? ? 'Production' : 'Staging'
       flash[:notice] = flash_message(:update_success, environment: environment)
-      update_onboarding_mapping_bubble
       update_mapping_rules_position
 
-      return redirect_to admin_service_integration_path(@service) if apiap?
-
-      if @proxy.send_api_test_request!
-        api_backend = @proxy.api_backend
-        onboarding.bubble_update('api')
-        done_step(:api_sandbox_traffic) if api_backend.present? && ApiClassificationService.test(api_backend).real_api?
-        return redirect_to edit_path
-      end
-      render :edit
+      redirect_to admin_service_integration_path(@service)
     else
       attrs = proxy_rules_attributes
       splitted = attrs.keys.group_by { |key| attrs[key]['_destroy'] == '1' }
@@ -50,33 +36,12 @@ class Api::IntegrationsController < Api::BaseController
       flash.now[:error] = flash_message(:update_error)
       @api_test_form_error = true
 
-      render :edit
-    end
-  end
-
-  def update_production
-    @proxy.deploy_production
-    ThreeScale::TimedValue.set(deploying_hosted_proxy_key, true, 5*60 )
-    ThreeScale::Analytics.track(current_user, 'Hosted Proxy deployed')
-    flash[:notice] = flash_message(:update_production_success)
-
-    done_step(:apicast_gateway_deployed, final_step=true) if ApiClassificationService.test(@proxy.api_backend).real_api?
-    onboarding.bubble_update('deployment')
-
-    redirect_to action: :edit, anchor: 'proxy'
-  end
-
-  def update_onpremises_production
-    if @proxy.update_attributes(proxy_params)
-      flash[:notice] = flash_message(:update_onpremises_production_success)
-      redirect_to action: :edit, anchor: 'production'
-    else
-      render :edit
+      render :show
     end
   end
 
   def promote_to_production
-    if @proxy.deploy_production
+    if ProxyDeploymentService.call(@proxy, environment: :production)
       flash[:notice] = flash_message(:promote_to_production_success)
     else
       flash[:error] = flash_message(:promote_to_production_error)
@@ -91,7 +56,6 @@ class Api::IntegrationsController < Api::BaseController
       end
 
       format.zip do
-        onboarding.bubble_update('deployment')
 
         source = if provider_can_use?(:apicast_per_service)
                    Apicast::UserSource.new(current_user)
@@ -133,7 +97,8 @@ class Api::IntegrationsController < Api::BaseController
   protected
 
   def find_registry_policies
-    @registry_policies ||= Policies::PoliciesListService.call!(current_account, proxy: @proxy)
+    policies_list = Policies::PoliciesListService.call!(current_account, proxy: @proxy)
+    @registry_policies = PoliciesListPresenter.new(policies_list).registry
   rescue StandardError => error
     @error = error
   end
@@ -144,9 +109,7 @@ class Api::IntegrationsController < Api::BaseController
     @proxy.reload
     @proxy.assign_attributes(proxy_params.except(:lock_version))
 
-    @last_message_bus_id = nil # don't want MessageBus showing flash message
-
-    render :edit, status: :conflict
+    render :show, status: :conflict
   end
 
   def flash_message(key, opts = {})
@@ -155,49 +118,16 @@ class Api::IntegrationsController < Api::BaseController
 
   def proxy_pro_update
     if @proxy.update_attributes(proxy_params)
-      update_onboarding_mapping_bubble
-      onboarding.bubble_update('api')
       update_mapping_rules_position
       flash[:notice] = flash_message(:proxy_pro_update_sucess)
-      redirect_to edit_path
+      redirect_to :show
     else
-      render :edit
+      render :show
     end
-  end
-
-  def async_update
-    if (@deploy_id = @proxy.save_and_async_deploy(proxy_params, current_user))
-      flash.now[:notice] = flash_message(:async_update_success)
-
-      render :edit
-    else
-      attrs = params.fetch(:proxy, {}).fetch(:proxy_rules_attributes,{})
-      splitted = attrs.keys.group_by { |key| attrs[key]['_destroy'] == '1' }
-
-      @marked_for_destroy = splitted[true]
-      @marked_for_update = splitted[false]
-
-      flash.now[:error] = flash_message(:async_update_error)
-      @api_test_form_error = true
-
-      render :edit
-    end
-  end
-
-  def edit_path
-    last_message_id = @last_message_bus_id
-
-    {
-      action: :edit,
-      last_id: last_message_id,
-      anchor: last_message_id ? 'second_nav' : 'proxy'
-    }.compact
   end
 
   def find_proxy
     @proxy = @service.proxy
-
-    @last_message_bus_id = params.fetch(:last_id) { last_message_bus_id(@proxy) } if message_bus?(@proxy)
   end
 
   def last_message_bus_id(proxy)
@@ -206,10 +136,6 @@ class Api::IntegrationsController < Api::BaseController
 
   def message_bus?(proxy)
     proxy.oidc? && ZyncWorker.config.message_bus
-  end
-
-  def hide_for_apiap
-    raise ActiveRecord::RecordNotFound if apiap?
   end
 
   def authorize
@@ -228,48 +154,57 @@ class Api::IntegrationsController < Api::BaseController
     params.fetch(:proxy, {}).fetch(:proxy_rules_attributes, {})
   end
 
-  def proxy_params
-    basic_fields = [
-      :lock_version,
+  PROXY_BASIC_PARAMS = [
+    :lock_version,
+    :auth_app_id,
+    :auth_app_key,
+    :api_backend,
+    :hostname_rewrite,
+    :oauth_login_url,
+    :secret_token,
+    :credentials_location,
+    :auth_user_key,
+    :error_status_auth_failed,
+    :error_headers_auth_failed,
+    :error_auth_failed,
+    :error_status_auth_missing,
+    :error_headers_auth_missing,
+    :error_auth_missing,
+    :error_status_no_match,
+    :error_headers_no_match,
+    :error_no_match,
+    :error_status_limits_exceeded,
+    :error_headers_limits_exceeded,
+    :error_limits_exceeded,
+    :api_test_path,
+    :policies_config,
+    { proxy_rules_attributes: %i[_destroy id http_method pattern delta metric_id redirect_url position last] },
+    { oidc_configuration_attributes: OIDCConfiguration::Config::ATTRIBUTES + [:id] },
+    { backend_api_configs_attributes: %i[_destroy id path] }
+  ].freeze
 
-      :auth_app_id, :auth_app_key, :api_backend, :hostname_rewrite, :oauth_login_url,
-      :secret_token, :credentials_location, :auth_user_key, :error_status_auth_failed,
-      :error_headers_auth_failed, :error_auth_failed, :error_status_auth_missing,
-      :error_headers_auth_missing, :error_auth_missing, :error_status_no_match,
-      :error_headers_no_match, :error_no_match, :error_status_limits_exceeded, :error_headers_limits_exceeded, :error_limits_exceeded,
-      :api_test_path, :policies_config, proxy_rules_attributes: %i[_destroy id http_method pattern delta metric_id
-                                                                   redirect_url position last], oidc_configuration_attributes: OIDCConfiguration::Config::ATTRIBUTES
-    ]
+  def proxy_params
+    permitted_fields = PROXY_BASIC_PARAMS.dup
 
     if Rails.application.config.three_scale.apicast_custom_url || @proxy.saas_configuration_driven_apicast_self_managed?
-      basic_fields << :endpoint
-      basic_fields << :sandbox_endpoint
+      permitted_fields << :endpoint
+      permitted_fields << :sandbox_endpoint
     end
 
-    basic_fields << :endpoint if @service.using_proxy_pro? || @proxy.saas_script_driven_apicast_self_managed?
+    permitted_fields << :endpoint if @service.using_proxy_pro? || @proxy.saas_script_driven_apicast_self_managed?
 
     if provider_can_use?(:apicast_oidc)
-      basic_fields << :oidc_issuer_endpoint
-      basic_fields << :oidc_issuer_type
-      basic_fields << :jwt_claim_with_client_id
-      basic_fields << :jwt_claim_with_client_id_type
+      permitted_fields << :oidc_issuer_endpoint
+      permitted_fields << :oidc_issuer_type
+      permitted_fields << :jwt_claim_with_client_id
+      permitted_fields << :jwt_claim_with_client_id_type
     end
 
-    basic_fields << { backend_api_configs_attributes: %i[_destroy id path] } if provider_can_use?(:api_as_product)
-
-    params.require(:proxy).permit(*basic_fields)
+    params.require(:proxy).permit(*permitted_fields)
   end
 
   def deploying_hosted_proxy_key
     "#{current_account.id}/deploying_hosted"
-  end
-
-  def update_onboarding_mapping_bubble
-    onboarding.bubble_update('mapping') if proxy_rules_added_for_last_method_metric?
-  end
-
-  def proxy_rules_added_for_last_method_metric?
-    @proxy.proxy_rules.size > 1
   end
 
   def toggle_land_path

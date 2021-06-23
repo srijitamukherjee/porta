@@ -11,7 +11,7 @@ When /^I try to (create|update) the active docs( of the service)? with (in)?vali
   fill_in('Name', with: 'ActiveDocsName')
   api_spec = invalid ? 'invalid' : FactoryBot.build(:api_docs_service).body
   fill_in('API JSON Spec', with: api_spec)
-  click_on "#{action.capitalize!} Service"
+  click_on "#{action.capitalize!} Spec"
 end
 
 When /^I select a service from the service selector$/ do
@@ -37,6 +37,7 @@ end
 
 Then(/^the swagger autocomplete should work for "(.*?)" with "(.*?)"$/) do |input_name, autocomplete|
   click_on 'get'
+  wait_for_requests
   assert_equal 1, evaluate_script("$('input[name=#{input_name}]').focus().length")
   assert_equal 1, evaluate_script("$('.apidocs-param-tips.#{autocomplete}:visible').length")
 end

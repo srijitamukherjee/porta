@@ -2,18 +2,29 @@
 
 class Api::ServicesController < Api::BaseController
   include ServiceDiscovery::ControllerMethods
+  include SearchSupport
+  include ThreeScale::Search::Helpers
 
   activate_menu :serviceadmin, :overview
 
   before_action :deny_on_premises_for_master
-  before_action :authorize_manage_plans, only: %i[create destroy]
-  before_action :authorize_admin_plans, except: %i[create destroy]
-
-  load_and_authorize_resource :service, through: :current_user,
-    through_association: :accessible_services, except: [:create]
+  before_action :authorize_section
+  before_action :authorize_action, only: %i[new create]
+  load_and_authorize_resource :service, through: :current_user, through_association: :accessible_services, except: [:create]
 
   with_options only: %i[edit update settings usage_rules] do |actions|
     actions.sublayout 'api/service'
+  end
+
+  def index
+    activate_menu :products
+    search = ThreeScale::Search.new(params[:search] || params)
+    @services = current_user.accessible_services
+                            .order(updated_at: :desc)
+                            .scope_search(search)
+    @page_services = @services.paginate(pagination_params)
+                              .decorate
+                              .to_json(only: %i[name updated_at id system_name], methods: %i[links apps_count backends_count unread_alerts_count])
   end
 
   def show
@@ -21,8 +32,8 @@ class Api::ServicesController < Api::BaseController
   end
 
   def new
-    activate_menu :dashboard
-    @service = collection.build params[:service]
+    activate_menu :products
+    @service = ServicePresenter.new(collection.build(params[:service]))
   end
 
   def edit
@@ -31,24 +42,22 @@ class Api::ServicesController < Api::BaseController
 
   def settings
     activate_menu :serviceadmin, :integration, :settings
-    render settings_page
+    render :settings
   end
 
   def usage_rules
-    raise ActiveRecord::RecordNotFound unless apiap?
     activate_menu :serviceadmin, :applications, :usage_rules
   end
 
   def create
-    @service = collection.new # this is done in 2 steps so that the account_id is in place as preffix_key relies on it
+    @service = ServicePresenter.new(collection.new)
     creator = ServiceCreator.new(service: @service)
 
     if can_create? && creator.call(create_params)
-      flash[:notice] = t('flash.services.create.notice', resource_type: product_or_service_type)
-      onboarding.bubble_update('api')
+      flash[:notice] = t('flash.services.create.notice')
       redirect_to admin_service_path(@service)
     else
-      flash.now[:error] = t('flash.services.create.error', resource_type: product_or_service_type)
+      flash.now[:error] = @service.errors.full_messages.to_sentence.presence || I18n.t!('flash.services.create.errors.default')
       activate_menu :dashboard
       render :new
     end
@@ -56,19 +65,17 @@ class Api::ServicesController < Api::BaseController
 
   def update
     if integration_settings_updater_service.call(service_attributes: service_params, proxy_attributes: proxy_params)
-      flash[:notice] =  t('flash.services.update.notice', resource_type: product_or_service_type)
-      onboarding.bubble_update('api') if service_name_changed?
-      onboarding.bubble_update('deployment') if integration_method_changed? && !integration_method_self_managed?
+      flash[:notice] =  t('flash.services.update.notice')
       redirect_back_or_to :action => :settings
     else
-      flash.now[:error] = t('flash.services.update.error', resource_type: product_or_service_type)
-      render action: params[:update_settings].present? ? settings_page : :edit # edit page is only page with free form fields. other forms are less probable to have errors
+      flash.now[:error] = t('flash.services.update.error')
+      render action: params[:update_settings].present? ? :settings : :edit # edit page is only page with free form fields. other forms are less probable to have errors
     end
   end
 
   def destroy
     @service.mark_as_deleted!
-    flash[:notice] = t('flash.services.destroy.notice', resource_type: product_or_service_type, resource_name: @service.name)
+    flash[:notice] = t('flash.services.destroy.notice', resource_name: @service.name)
     redirect_to provider_admin_dashboard_path
   end
 
@@ -100,16 +107,34 @@ class Api::ServicesController < Api::BaseController
     params.require(:service).permit(permitted_params)
   end
 
+  DEFAULT_PARAMS = [
+    { oidc_configuration_attributes: OIDCConfiguration::Config::FLOWS + [:id] },
+    :oidc_issuer_type,
+    :oidc_issuer_endpoint,
+    :jwt_claim_with_client_id,
+    :jwt_claim_with_client_id_type,
+    :auth_user_key,
+    :auth_app_id,
+    :auth_app_key,
+    :credentials_location,
+    :hostname_rewrite,
+    :secret_token,
+    :error_status_auth_failed,
+    :error_headers_auth_failed,
+    :error_auth_failed,
+    :error_status_auth_missing,
+    :error_headers_auth_missing,
+    :error_auth_missing,
+    :error_status_no_match,
+    :error_headers_no_match,
+    :error_no_match,
+    :error_status_limits_exceeded,
+    :error_headers_limits_exceeded,
+    :error_limits_exceeded
+  ].freeze
+
   def proxy_params
-    oidc_params = %i[oidc_issuer_type oidc_issuer_endpoint jwt_claim_with_client_id jwt_claim_with_client_id_type] + OIDCConfiguration::Config::FLOWS
-    permitted_params = oidc_params + %i[
-      auth_user_key auth_app_id auth_app_key credentials_location hostname_rewrite secret_token
-      error_status_auth_failed error_headers_auth_failed error_auth_failed
-      error_status_auth_missing error_headers_auth_missing error_auth_missing
-      error_status_no_match error_headers_no_match error_no_match
-      error_status_limits_exceeded error_headers_limits_exceeded error_limits_exceeded
-    ]
-    permitted_params << :api_backend unless apiap?
+    permitted_params = DEFAULT_PARAMS
     permitted_params += %i[endpoint sandbox_endpoint] if can_edit_endpoints?
     params.require(:service).fetch(:proxy_attributes, {}).permit(permitted_params)
   end
@@ -118,40 +143,20 @@ class Api::ServicesController < Api::BaseController
     Rails.application.config.three_scale.apicast_custom_url || service.proxy.saas_configuration_driven_apicast_self_managed?
   end
 
-  # This will be the default 'settings' when apiap is live
-  def settings_page
-    apiap? ? :settings_apiap : :settings
-  end
-
-  def product_or_service_type
-    apiap? ? 'Product' : 'Service'
-  end
-
-  def service_name_changed?
-    @service.previous_changes['name']
-  end
-
-  def integration_method_changed?
-    @service.previous_changes['deployment_option']
-  end
-
-  def integration_method_self_managed?
-    @service.proxy.self_managed?
-  end
-
   def collection
     current_user.accessible_services
   end
 
-  def can_create?
-    can? :create, Service
-  end
-
-  def authorize_manage_plans
+  def authorize_section
     authorize! :manage, :plans
   end
 
-  def authorize_admin_plans
-    authorize! :admin, :plans
+  def authorize_action
+    return if current_user.admin? # We want to postpone for admins so we can use #can_create? and provide better error messages
+    authorize! action_name.to_sym, Service
+  end
+
+  def can_create?
+    can? :create, Service
   end
 end

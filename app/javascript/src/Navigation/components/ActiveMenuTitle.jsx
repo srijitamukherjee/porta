@@ -1,20 +1,18 @@
 // @flow
 
-import React from 'react'
+import * as React from 'react'
 import 'core-js/es6/map'
 import 'core-js/es6/set'
 
 import 'Navigation/styles/ActiveMenuTitle.scss'
 
-import type { Api, Menu } from 'Types'
+import type { Menu } from 'Types'
 
 type Props = {
-  activeMenu: Menu,
-  currentApi: Api,
-  apiap?: boolean
+  activeMenu: Menu
 }
 
-const ActiveMenuTitle = ({ activeMenu, currentApi, apiap = false }: Props) => {
+const ActiveMenuTitle = ({ activeMenu }: Props): React.Node => {
   const getIconAndText: () => [string, string] = () => {
     switch (activeMenu) {
       case 'dashboard':
@@ -22,6 +20,7 @@ const ActiveMenuTitle = ({ activeMenu, currentApi, apiap = false }: Props) => {
 
       case 'personal':
       case 'account':
+      case 'active_docs':
         return ['fa-cog', 'Account Settings']
 
       case 'audience':
@@ -30,33 +29,34 @@ const ActiveMenuTitle = ({ activeMenu, currentApi, apiap = false }: Props) => {
       case 'cms':
       case 'site':
       case 'settings':
-        return ['fa-bullseye', 'Audience']
-
       case 'apis':
       case 'applications':
-      case 'active_docs':
-        return ['fa-puzzle-piece', 'All APIs']
+        return ['fa-bullseye', 'Audience']
 
       case 'serviceadmin':
       case 'monitoring':
-        return apiap ? ['fa-cubes', `Product: ${currentApi.name}`] : ['fa-puzzle-piece', `Api: ${currentApi.name}`]
+      case 'products':
+        return ['fa-cubes', 'Products']
 
       case 'backend_api':
-        return ['fa-cube', `Backend: ${currentApi.name}`]
+      case 'backend_apis':
+        return ['fa-cube', 'Backends']
 
       default:
-        return ['fa-puzzle-piece', 'Choose an API']
+        return ['', '']
     }
   }
 
   const [icon, text] = getIconAndText()
 
   return (
-    <span className="ActiveMenuTitle">
-      <i className={`fa ${icon}`} />
-      {text}
-      <i className='fa fa-chevron-down' />
-    </span>
+    <>
+      <span className="pf-c-context-selector__toggle-text">
+        <i className={`fa ${icon}` + ' header-context-selector__toggle-text-icon'} />
+        {text}
+      </span>
+      <i className='fa fa-chevron-down  pf-c-context-selector__toggle-icon' />
+    </>
   )
 }
 

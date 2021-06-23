@@ -1,8 +1,6 @@
-require 'three_scale/error_reporting_ignore_enduser'
+# frozen_string_literal: true
 
 class DeveloperPortal::AccessCodesController < ApplicationController
-  include ::ThreeScale::ErrorReportingIgnoreEnduser
-  error_reporting_ignore_enduser
 
   #TODO: if AccessCodeProtection would be splitted in more modules this wouldn't be needed
 
@@ -32,7 +30,7 @@ class DeveloperPortal::AccessCodesController < ApplicationController
   private
 
   def cms_params
-    params.slice(:cms_token, :cms)
+    params.permit(:cms_token, :cms)
   end
 
   def return_url

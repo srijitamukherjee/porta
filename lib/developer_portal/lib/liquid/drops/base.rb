@@ -92,7 +92,7 @@ module Liquid
       end
 
       privately_include  do
-        include DeveloperPortal::Engine.routes.url_helpers
+        include System::UrlHelpers.cms_url_helpers
       end
 
       def url_options
@@ -102,14 +102,6 @@ module Liquid
 
       def optimize_routes_generation?
         true
-      end
-
-      def system_url_helpers
-        Rails.application.routes.url_helpers
-      end
-
-      def cms_url_helpers
-        DeveloperPortal::Engine.routes.url_helpers
       end
     end
   end

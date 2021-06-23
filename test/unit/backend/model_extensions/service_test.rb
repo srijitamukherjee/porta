@@ -1,13 +1,12 @@
 require 'test_helper'
 
 class Backend::ModelExtensions::ServiceTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
 
   test 'stores backend service data when service is saved' do
     service = FactoryBot.build(:service,
       account: FactoryBot.create(:provider_account), referrer_filters_required: true)
 
-    ThreeScale::Core::Service.expects(:save!).with do |params|
+    ThreeScale::Core::Service.expects(:save!).at_least_once.with do |params|
       params[:id] == service.backend_id &&
         params[:referrer_filters_required] == true
     end

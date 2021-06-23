@@ -1,6 +1,5 @@
 
 class ApplicationPlan < Plan
-  include ::ThreeScale::MethodTracing
 
   #TODO: is the dependent :destroy working?
   has_many :cinstances, :foreign_key => :plan_id, :dependent => :destroy, :inverse_of => :plan
@@ -10,13 +9,11 @@ class ApplicationPlan < Plan
   belongs_to :partner
   belongs_to :service, :foreign_key => :issuer_id, :inverse_of => :application_plans
 
-  validate :end_users_switch
-
   scope :provided_by, ->(provider) {
     if provider == :all || provider.blank?
       {}
     else
-      where(services: { account_id: provider }).joins(:service).references(:service).readonly(false)
+      where(services: { account_id: provider.id }).joins(:service).references(:service).readonly(false)
     end
   }
 
@@ -48,13 +45,11 @@ class ApplicationPlan < Plan
       :default => self.master?
     }
     extra_nodes = {
-      service_id: issuer_id,
-      end_user_required: end_user_required
+      service_id: issuer_id
     }
     xml_builder(options, attrs, extra_nodes).to_xml
   end
 
-  add_three_scale_method_tracer :to_xml, 'ActiveRecord/ApplicationPlan/to_xml'
 
   protected
 
@@ -85,15 +80,6 @@ class ApplicationPlan < Plan
   end
 
   private
-
-  def end_users_switch
-    return unless issuer.try!(:account)
-    switch = issuer.account.settings.end_users
-
-    if end_user_required && (not switch.allowed?)
-      errors.add(:end_user_required, :not_allowed)
-    end
-  end
 
   def default_options_for buyer
     DEFAULT_CONTRACT_OPTIONS.inject({}){|memo, (k,v)| memo[k] = sprintf(v, buyer.org_name); memo}

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 class MetricTest < ActiveSupport::TestCase
@@ -102,20 +104,6 @@ class MetricTest < ActiveSupport::TestCase
     hits = backend_api.metrics.hits
     method = hits.children.create(system_name: 'meth1')
     assert_equal backend_api, method.owner
-  end
-
-  test 'archive as deleted' do
-    service = FactoryBot.create(:simple_service)
-    Timecop.freeze(Time.utc(2009, 12, 22)) { FactoryBot.create(:metric, service: service) }
-    metric = service.metrics.last
-    metric_id = metric.id
-
-    assert_difference(DeletedObject.method(:count), +1) { metric.destroy! }
-    deleted_object_entry = DeletedObject.last!
-    assert_equal metric_id, deleted_object_entry.object_id
-    assert_equal 'Metric', deleted_object_entry.object_type
-    assert_equal service.id, deleted_object_entry.owner_id
-    assert_equal 'Service', deleted_object_entry.owner_type
   end
 
   context 'on :destroy' do
@@ -381,6 +369,21 @@ class MetricTest < ActiveSupport::TestCase
       @metric1.enable_for_plan(@plan)
       assert @metric1.enabled_for_plan?(@plan)
     end
-
   end # enabled or disabled for plan
+
+  test '.by_provider' do
+    provider, other_provider = FactoryBot.create_list(:simple_provider, 2)
+
+    service = FactoryBot.create(:simple_service, account: provider)
+    backend_api = FactoryBot.create(:backend_api, account: provider)
+    service_metric = FactoryBot.create(:metric, owner: service)
+    backend_metric = FactoryBot.create(:metric, owner: backend_api)
+
+    other_service = FactoryBot.create(:simple_service, account: other_provider)
+    other_backend_api = FactoryBot.create(:backend_api, account: other_provider)
+    other_service_metric = FactoryBot.create(:metric, owner: other_service)
+    other_backend_metric = FactoryBot.create(:metric, owner: other_backend_api)
+
+    assert_same_elements [service.metrics.hits, service_metric, backend_api.metrics.hits, backend_metric], Metric.by_provider(provider)
+  end
 end

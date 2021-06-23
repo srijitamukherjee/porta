@@ -7,8 +7,7 @@ import { apiMiddleware } from 'redux-api-middleware'
 import { policyChainMiddleware } from 'Policies/middleware/PolicyChain'
 import rootReducer from 'Policies/reducers'
 
-import type {State} from 'Policies/types/State'
-import type {Store} from 'Policies/types'
+import type { State, Store } from 'Policies/types'
 
 function configureStoreProd (initialState: State): Store {
   const middlewares = [
@@ -21,9 +20,9 @@ function configureStoreProd (initialState: State): Store {
     policyChainMiddleware
   ]
 
-  // $FlowFixMe returns Store
+  // $FlowIgnore[prop-missing] returns Store
   return createStore(rootReducer, initialState, compose(
-    // $FlowFixMe
+    // $FlowIgnore[incompatible-variance]
     applyMiddleware(...middlewares)
   ))
 }
@@ -43,24 +42,17 @@ function configureStoreDev (initialState: State): Store {
   ]
 
   const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose // add support for Redux dev tools
-  // $FlowFixMe
+
   const store = createStore(rootReducer, initialState, composeEnhancers(
-    // $FlowFixMe
+    // $FlowIgnore[incompatible-variance]
     applyMiddleware(...middlewares)
   ))
 
-  if (module.hot) {
-    // Enable Webpack hot module replacement for reducers
-    module.hot.accept('../reducers', () => {
-      const nextReducer = require('../reducers').default // eslint-disable-line global-require
-      store.replaceReducer(nextReducer)
-    })
-  }
-
-  // $FlowFixMe this is of type State
+  // $FlowIgnore[prop-missing] this is of type State
   return store
 }
 
+// $FlowIgnore[signature-verification-failure] we can pass over types safely
 const configureStore = process.env.NODE_ENV === 'production' ? configureStoreProd : configureStoreDev
 
 export default configureStore

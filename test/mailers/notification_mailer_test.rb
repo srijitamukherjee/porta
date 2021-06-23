@@ -51,8 +51,8 @@ class NotificationMailerTest < ActionMailer::TestCase
       assert_match 'Dear Foobar Admin', body.encoded
       assert_match "A new application subscribed to the #{application.plan.name} plan on the #{service.name} service of the #{application.account.name} account.", body.encoded
       assert_match 'Application details:', body.encoded
-      cinstance_url = Rails.application.routes.url_helpers.admin_service_application_url(service, application,
-                                                                                         host: service.account.admin_domain)
+      cinstance_url = System::UrlHelpers.system_url_helpers.admin_service_application_url(service, application,
+                                                                                         host: service.account.external_admin_domain)
       assert_match cinstance_url, body.encoded
 
       assert_html_email(mail) do
@@ -66,11 +66,11 @@ class NotificationMailerTest < ActionMailer::TestCase
     provider = FactoryBot.create(:simple_provider)
     FieldsDefinition.create!(account: provider, name: 'org_name', target: 'Account', label: 'foo')
     account = FactoryBot.create(:simple_account, provider_account: provider)
-    user  = FactoryBot.build_stubbed(:simple_user, first_name: 'Some Gal', account: account)
+    user = FactoryBot.build_stubbed(:simple_user, first_name: 'Some Gal', account: account)
     event = Accounts::AccountCreatedEvent.create(account, user)
     mail  = NotificationMailer.account_created(event, receiver)
 
-    assert_equal "#{user.informal_name} from #{account.name} signed up", mail.subject
+    assert_equal "#{user.decorate.informal_name} from #{account.name} signed up", mail.subject
     assert_equal [receiver.email], mail.to
 
     [mail.html_part.body, mail.text_part.body].each do |body|
@@ -116,8 +116,8 @@ class NotificationMailerTest < ActionMailer::TestCase
       assert_match 'Dear Foobar Admin', body.encoded
       assert_match "Application #{application.name} of your client #{application.user_account.name}", body.encoded
       assert_match "is above #{alert.level}% limit utilization of #{alert.message}.", body.encoded
-      cinstance_url = Rails.application.routes.url_helpers.admin_service_application_url(service, application,
-                                                                                         host: service.account.admin_domain)
+      cinstance_url = System::UrlHelpers.system_url_helpers.admin_service_application_url(service, application,
+                                                                                         host: service.account.external_admin_domain)
       assert_match cinstance_url, body.encoded
     end
   end
@@ -137,8 +137,8 @@ class NotificationMailerTest < ActionMailer::TestCase
       assert_match 'Dear Foobar Admin', body.encoded
       assert_match "Application #{application.name} of your client #{application.user_account.name}", body.encoded
       assert_match "is above #{alert.level}% limit utilization of #{alert.message}.", body.encoded
-      cinstance_url = Rails.application.routes.url_helpers.admin_service_application_url(service, application,
-                                                                                         host: service.account.admin_domain)
+      cinstance_url = System::UrlHelpers.system_url_helpers.admin_service_application_url(service, application,
+                                                                                         host: service.account.external_admin_domain)
       assert_match cinstance_url, body.encoded
     end
   end
@@ -165,16 +165,16 @@ class NotificationMailerTest < ActionMailer::TestCase
     provider = FactoryBot.build_stubbed(:simple_provider, id: 3)
     account  = FactoryBot.build_stubbed(:simple_buyer, id: 4, name: 'Alex',
                                                         bought_account_plan: plan_2, provider_account: provider)
-    user     = FactoryBot.build_stubbed(:simple_user, account: account)
-    event    = Accounts::AccountPlanChangeRequestedEvent.create(account, user, plan)
-    mail     = NotificationMailer.account_plan_change_requested(event, receiver)
+    user  = FactoryBot.build_stubbed(:simple_user, account: account)
+    event = Accounts::AccountPlanChangeRequestedEvent.create(account, user, plan)
+    mail  = NotificationMailer.account_plan_change_requested(event, receiver)
 
     assert_equal "#{account.name} has requested a plan change", mail.subject
     assert_equal [receiver.email], mail.to
 
     [mail.html_part.body, mail.text_part.body].each do |body|
       assert_match 'Dear Foobar Admin', body.encoded
-      assert_match "#{user.informal_name} from #{account.name} has requested to change", body.encoded
+      assert_match "#{user.decorate.informal_name} from #{account.name} has requested to change", body.encoded
       assert_match "their account plan from #{plan_2.name} to #{plan.name}", body.encoded
     end
   end
@@ -195,9 +195,9 @@ class NotificationMailerTest < ActionMailer::TestCase
 
     [mail.html_part.body, mail.text_part.body].each do |body|
       assert_match 'Dear Foobar Admin', body.encoded
-      assert_match "#{user.informal_name} from SimpleCompany has requested to change their Foo Service", body.encoded
+      assert_match "#{user.decorate.informal_name} from SimpleCompany has requested to change their Foo Service", body.encoded
       assert_match 'service subscription from Plan 1 to Plan 2.', body.encoded
-      assert_match url_helpers.admin_buyers_account_service_contracts_url(account, host: provider.admin_domain), body.encoded
+      assert_match url_helpers.admin_buyers_account_service_contracts_url(account, host: provider.external_admin_domain), body.encoded
     end
   end
 
@@ -301,7 +301,7 @@ class NotificationMailerTest < ActionMailer::TestCase
     [mail.html_part.body, mail.text_part.body].each do |body|
       assert_match 'Dear Foobar Admin', body.encoded
       assert_match "Alex's trial of the LALA application on the planLALA has expired.", body.encoded
-      assert_match url_helpers.admin_service_application_url(service, cinstance, host: service.provider.admin_domain), body.encoded
+      assert_match url_helpers.admin_service_application_url(service, cinstance, host: service.provider.external_admin_domain), body.encoded
     end
   end
 
@@ -394,8 +394,8 @@ class NotificationMailerTest < ActionMailer::TestCase
       assert_match "Previous plan: #{old_plan.name}", body.encoded
       assert_match "Current plan: #{cinstance.plan.name}", body.encoded
       assert_match "Application #{cinstance.name} has changed to plan #{cinstance.plan.name}.", body.encoded
-      cinstance_url = Rails.application.routes.url_helpers.admin_service_application_url(cinstance.service, cinstance,
-                                                                                         host: cinstance.service.account.admin_domain)
+      cinstance_url = System::UrlHelpers.system_url_helpers.admin_service_application_url(cinstance.service, cinstance,
+                                                                                         host: cinstance.service.account.external_admin_domain)
       assert_match cinstance_url, body.encoded
     end
   end
@@ -410,7 +410,7 @@ class NotificationMailerTest < ActionMailer::TestCase
     assert_equal "New message from #{message.sender.name}", mail.subject
     assert_equal [receiver.email], mail.to
 
-    url = url_helpers.provider_admin_messages_inbox_url(recipient, host: provider.admin_domain)
+    url = url_helpers.provider_admin_messages_inbox_url(recipient, host: provider.external_admin_domain)
 
     [mail.html_part.body, mail.text_part.body].each do |body|
       assert_match "You have a new message from #{message.sender.name}.", body.encoded
@@ -424,18 +424,20 @@ class NotificationMailerTest < ActionMailer::TestCase
     post  = FactoryBot.build_stubbed(:post, forum: forum, topic: topic)
     event = Posts::PostCreatedEvent.create(post)
     mail  = NotificationMailer.post_created(event, receiver)
+    user  = post.user
+    user_decorator = user.decorate
 
     assert_equal [[:manage, :forum]], NotificationMailer.required_abilities[:post_created]
 
-    assert_equal "New forum post by #{post.user.informal_name}", mail.subject
+    assert_equal "New forum post by #{user_decorator.informal_name}", mail.subject
     assert_equal [receiver.email], mail.to
 
     [mail.html_part.body, mail.text_part.body].each do |body|
-      assert_match "#{post.user.informal_name} from #{post.user.account.name}", body.encoded
+      assert_match "#{user_decorator.informal_name} from #{user.account.name}", body.encoded
     end
 
     # anonymous user
-    post.user = nil
+    post.stubs(user: nil)
 
     no_user_event = Posts::PostCreatedEvent.create(post)
     not_user_mail = NotificationMailer.post_created(no_user_event, receiver)
@@ -476,7 +478,7 @@ class NotificationMailerTest < ActionMailer::TestCase
 
     assert mail.attachments
     assert_equal mail.attachments.count, 1
-    assert_match "report-#{service.name}.pdf", mail.attachments.first.filename
+    assert_match "report-#{provider.external_domain}-#{service.id}.pdf", mail.attachments.first.filename
 
     [mail.html_part.body, mail.text_part.body].each do |body|
       assert_match 'Please find attached your API Usage Report', body.encoded
@@ -492,7 +494,7 @@ class NotificationMailerTest < ActionMailer::TestCase
 
     assert mail.attachments
     assert_equal mail.attachments.count, 1
-    assert_match "report-#{service.name}.pdf", mail.attachments.first.filename
+    assert_match "report-#{provider.external_domain}-#{service.id}.pdf", mail.attachments.first.filename
 
     [mail.html_part.body, mail.text_part.body].each do |body|
       assert_match 'Please find attached your API Usage Report', body.encoded
@@ -509,7 +511,7 @@ class NotificationMailerTest < ActionMailer::TestCase
 
     [mail.html_part.body, mail.text_part.body].each do |body|
       assert_match "The service #{service.name} has been deleted.", body.encoded
-      assert_match url_helpers.provider_admin_dashboard_url(host: persisted_provider.admin_domain), body.encoded
+      assert_match url_helpers.provider_admin_dashboard_url(host: persisted_provider.external_admin_domain), body.encoded
     end
   end
 
@@ -535,7 +537,7 @@ class NotificationMailerTest < ActionMailer::TestCase
       assert_match "Application: Boo App", body.encoded
       assert_match "Current plan: #{plan.name}", body.encoded
       assert_match "Requested plan: #{plan_2.name}", body.encoded
-      assert_match url_helpers.admin_service_application_url(application.service, application, host: application.service.provider.admin_domain), body.encoded
+      assert_match url_helpers.admin_service_application_url(application.service, application, host: application.service.provider.external_admin_domain), body.encoded
     end
   end
 
@@ -558,7 +560,7 @@ class NotificationMailerTest < ActionMailer::TestCase
   end
 
   def url_helpers
-    Rails.application.routes.url_helpers
+    System::UrlHelpers.system_url_helpers
   end
 
   def assert_html_email(delivery, &block)

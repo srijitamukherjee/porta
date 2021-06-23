@@ -28,12 +28,14 @@ module ThreeScale
 
     DAILY = %w[
       FindAndDeleteScheduledAccountsWorker.perform_async
+      SegmentDeleteUsersWorker.perform_later
       Audited.audit_class.delete_old
       LogEntry.delete_old
       Cinstance.notify_about_expired_trial_periods
       Pdf::Dispatch.daily
       DeleteProvidedAccessTokensWorker.perform_async
-      DestroyAllDeletedObjectsWorker.perform_async(Service.to_s)
+      DestroyAllDeletedObjectsWorker.perform_later(Service.to_s)
+      CreateDefaultProxyWorker::BatchEnqueueWorker.perform_later
     ].freeze
 
     BILLING = %w[
@@ -43,8 +45,7 @@ module ThreeScale
 
     HOUR = %w[Rails.env].freeze # just a fake job to ensure cron works
 
-    SPHINX_INDEX = [{ 'rake' => 'ts:index' }].freeze
-    SPHINX_DELTA = [{ 'rake' => 'ts:in:delta' }].freeze
+    SPHINX_INDEX_ALL = [{ 'rake' => 'sphinx:enqueue' }].freeze
 
     CUSTOM = {
     }.freeze

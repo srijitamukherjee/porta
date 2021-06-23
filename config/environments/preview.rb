@@ -16,13 +16,13 @@ System::Application.configure do
   # ip spoofing checks are pointless and might mess up proxies
   config.action_dispatch.ip_spoofing_check = false
 
-  config.assets.compile = true
+  config.assets.compile = false
   config.assets.compress = true
   config.assets.digest = true
 
   config.asset_host = proc { |_source, request = nil| request && request.headers["X-Forwarded-For-Domain"] }
 
-  config.serve_static_files = true
+  config.public_file_server.enabled = true
   config.middleware.insert_before ActionDispatch::Static, Rack::Deflater
 
   config.log_tags = [ :uuid, :host, :remote_ip ]

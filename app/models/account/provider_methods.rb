@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Account::ProviderMethods
   extend ActiveSupport::Concern
 
@@ -30,6 +32,7 @@ module Account::ProviderMethods
     has_many :usage_limits, through: :services
     has_many :metrics, through: :services
     has_many :top_level_metrics, through: :services
+    has_many :backend_api_metrics, through: :backend_apis, source: :metrics
     has_many :proxies, through: :services
     has_many :proxy_rules, through: :proxies
     has_many :proxy_logs, foreign_key: :provider_id
@@ -47,6 +50,7 @@ module Account::ProviderMethods
     end
 
     has_many :backend_apis, inverse_of: :account, dependent: :destroy
+    has_many :accessible_backend_apis, -> { accessible }, class_name: 'BackendApi'
 
     has_attached_file :proxy_configs, storage: :s3, path: '.sandbox_proxy/sandbox_proxy_:id.lua'
     do_not_validate_attachment_file_type :proxy_configs
@@ -63,20 +67,19 @@ module Account::ProviderMethods
         def flush_writes; end
       end
 
-      def proxy_configs_with_rescue
-        proxy_configs_without_rescue
-      rescue LoadError
-        FakeAttachment.new(:proxy_configs, self)
-      end
+      prepend(Module.new do
+        def proxy_configs
+          super
+        rescue LoadError
+          FakeAttachment.new(:proxy_configs, self)
+        end
 
-      def proxy_configs_conf_with_rescue
-        proxy_configs_conf_without_rescue
-      rescue LoadError
-        FakeAttachment.new(:proxy_configs_conf, self)
-      end
-
-      alias_method_chain :proxy_configs, :rescue
-      alias_method_chain :proxy_configs_conf, :rescue
+        def proxy_configs_conf
+          super
+        rescue LoadError
+          FakeAttachment.new(:proxy_configs_conf, self)
+        end
+      end)
     end
 
 
@@ -126,13 +129,11 @@ module Account::ProviderMethods
       end
     end
 
-    has_many :end_user_plans, through: :services
     has_many :account_plans, as: :issuer,  inverse_of: :provider, dependent: :destroy, &DefaultPlanProxy
     has_many :issued_plans, as: :issuer, class_name: 'Plan'
 
     has_many :default_service_plans, through: :services, class_name: 'ServicePlan'
     has_many :default_application_plans, through: :services, class_name: 'ApplicationPlan'
-    has_many :default_end_user_plans, through: :services, class_name: 'EndUserPlan'
     belongs_to :default_account_plan, class_name: 'AccountPlan'
 
     has_many :fields_definitions, -> { by_position }, inverse_of: :account do
@@ -190,7 +191,7 @@ module Account::ProviderMethods
 
   def provider_key
     ensure_provider
-    self.bought_cinstances.first!.user_key
+    bought_cinstances.first!.user_key
   end
 
   def api_key?
@@ -251,6 +252,14 @@ module Account::ProviderMethods
     else
       raise ProviderOnlyMethodCalledError
     end
+  end
+
+  def admin_base_url
+    build_base_url(admin_domain)
+  end
+
+  def base_url
+    build_base_url(domain)
   end
 
   def require_billing_information!
@@ -332,19 +341,29 @@ module Account::ProviderMethods
   def create_first_service
     return if @signup_mode
 
-    unless self.bought_cinstances.exists?
-      application_plans = Account.master.accessible_services.default.application_plans
-      plan = application_plans.default || application_plans.first!
-      plan.create_contract_with!(self)
-    end
+    create_first_cinstance unless has_bought_cinstance?
 
     ServiceCreator.new(service: services.build(name: 'API')).call(private_endpoint: BackendApi.default_api_backend)
+  end
+
+  def create_first_cinstance
+    application_plans = Account.master.accessible_services.default.application_plans
+    plan = application_plans.default || application_plans.first!
+    plan.create_contract_with!(self)
   end
 
   def create_default_fields_definitions
     # we don't do this for master to avoid slow things more
     # reason of the unless : Account.master.provider? => true
     FieldsDefinition.create_defaults!(self) unless master?
+  end
+
+  def base_url_protocol
+    Rails.application.config.force_ssl ? 'https' : 'http'
+  end
+
+  def build_base_url(host)
+    [base_url_protocol, host.to_s.split('://').last].compact.join('://').presence
   end
 
   private

@@ -1,15 +1,16 @@
 // @flow
 
-import React from 'react'
+import * as React from 'react'
+import Form from 'react-jsonschema-form'
+import { Button } from '@patternfly/react-core'
 
-import { PoliciesForm } from 'Policies/components/PoliciesForm'
+import { isNotApicastPolicy } from 'Policies/util'
+import { HeaderButton } from 'Policies/components/HeaderButton'
 
-import type { ThunkAction } from 'Policies/types/index'
-import type { ChainPolicy } from 'Policies/types/Policies'
+import type { ThunkAction, ChainPolicy } from 'Policies/types'
 import type { UpdatePolicyConfigAction } from 'Policies/actions/PolicyConfig'
 
 type Props = {
-  visible: boolean,
   policy: ChainPolicy,
   actions: {
     submitPolicyConfig: (ChainPolicy) => ThunkAction,
@@ -19,15 +20,68 @@ type Props = {
   }
 }
 
-const PolicyConfig = ({visible, policy, actions}: Props) => {
-  return (<PoliciesForm
-    visible={visible}
-    policy={policy}
-    submitForm={actions.submitPolicyConfig}
-    removePolicy={actions.removePolicyFromChain}
-    closePolicyConfig={actions.closePolicyConfig}
-    updatePolicy={actions.updatePolicyConfig}
-  />)
+const PolicyConfig = ({policy, actions}: Props): React.Node => {
+  const { submitPolicyConfig, removePolicyFromChain, closePolicyConfig, updatePolicyConfig } = actions
+  const { humanName, version, summary, description, enabled, configuration, data, removable } = policy
+
+  const onSubmit = (policy) => {
+    return ({formData, schema}) => {
+      submitPolicyConfig({...policy, configuration: schema, data: formData})
+    }
+  }
+  const togglePolicy = (event) => {
+    updatePolicyConfig({...policy, enabled: event.target.checked})
+  }
+  const remove = () => removePolicyFromChain(policy)
+  const cancel = () => closePolicyConfig()
+
+  const isPolicyVisible = isNotApicastPolicy(policy)
+
+  return (
+    <section className="PolicyConfiguration">
+      <header>
+        <h2>Edit Policy</h2>
+        <HeaderButton type="cancel" onClick={cancel}>
+          Cancel
+        </HeaderButton>
+      </header>
+      <h2 className="PolicyConfiguration-name">{humanName}</h2>
+      <p className="PolicyConfiguration-version-and-summary">
+        {`${version} - ${summary || ''}`}
+      </p>
+      <p className="PolicyConfiguration-description">{description}</p>
+      { isPolicyVisible &&
+        <label className="Policy-status" htmlFor="policy-enabled">
+          <input
+            id="policy-enabled"
+            name="policy-enabled"
+            type="checkbox"
+            checked={enabled}
+            onChange={togglePolicy}
+          />
+          Enabled
+        </label>
+      }
+      { isPolicyVisible &&
+        <Form
+          className="PolicyConfiguration-form"
+          schema={configuration}
+          formData={data}
+          onSubmit={onSubmit(policy)}
+        >
+          <Button className="btn-info" type="submit">Update Policy</Button>
+        </Form>
+      }
+      { removable &&
+        <Button
+          variant="danger"
+          onClick={remove}
+        >
+          Remove
+        </Button>
+      }
+    </section>
+  )
 }
 
 export { PolicyConfig }

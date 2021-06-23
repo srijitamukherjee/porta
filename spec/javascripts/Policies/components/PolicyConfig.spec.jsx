@@ -2,7 +2,6 @@ import React from 'react'
 import { mount } from 'enzyme'
 
 import { PolicyConfig } from 'Policies/components/PolicyConfig'
-import { PolicyForm } from 'Policies/components/PoliciesForm'
 
 describe('PolicyConfig Component', () => {
   function setup () {
@@ -46,7 +45,6 @@ describe('PolicyConfig Component', () => {
     }
 
     const props = {
-      visible: true,
       policy: policyConfig,
       actions: {
         submitPolicyConfig: jest.fn(),
@@ -68,12 +66,8 @@ describe('PolicyConfig Component', () => {
   it('should render self', () => {
     const {policyConfigWrapper} = setup()
     expect(policyConfigWrapper.find('section').hasClass('PolicyConfiguration')).toBe(true)
-
-    const registryProps = policyConfigWrapper.props()
-    expect(registryProps.visible).toBe(true)
     expect(policyConfigWrapper.find('.PolicyConfiguration-name').text()).toBe('Caching policy')
-    expect(policyConfigWrapper.find('.PolicyConfiguration-version').text()).toBe('builtin')
-    expect(policyConfigWrapper.find('.PolicyConfiguration-summary').text()).toBe('Caching')
+    expect(policyConfigWrapper.find('.PolicyConfiguration-version-and-summary').text()).toBe('builtin - Caching')
     expect(policyConfigWrapper.find('.PolicyConfiguration-description').text())
       .toBe('Configures a cache for the authentication calls against the 3scale')
     expect(policyConfigWrapper.find('#policy-enabled').prop('checked')).toBe(true)
@@ -88,25 +82,26 @@ describe('PolicyConfig Component', () => {
 
   it('should have a close button', () => {
     const {policyConfigWrapper, props} = setup()
-    const closeConfigButton = policyConfigWrapper.find('.PolicyConfiguration-cancel')
-    expect(closeConfigButton.text()).toBe(' Cancel')
+    const closeConfigButton = policyConfigWrapper.find('HeaderButton')
+    expect(closeConfigButton.find('.PolicyChain-addPolicy--cancel').exists()).toBe(true)
+    expect(closeConfigButton.text()).toBe('Cancel')
 
-    closeConfigButton.simulate('click')
-    expect(props.actions.closePolicyConfig.mock.calls.length).toBe(1)
+    closeConfigButton.props().onClick()
+    expect(props.actions.closePolicyConfig).toHaveBeenCalledTimes(1)
   })
 
   it('should have a remove button', () => {
     const {policyConfigWrapper, props} = setup()
-    const removePolicyButton = policyConfigWrapper.find('.PolicyConfiguration-remove')
+    const removePolicyButton = policyConfigWrapper.find('.pf-c-button.pf-m-danger')
     expect(removePolicyButton.exists()).toBe(true)
 
     removePolicyButton.simulate('click')
-    expect(props.actions.removePolicyFromChain.mock.calls.length).toBe(1)
+    expect(props.actions.removePolicyFromChain).toHaveBeenCalledTimes(1)
   })
 
   it('should have a submit button', () => {
     const {policyConfigWrapper} = setup()
-    const submitPolicyButton = policyConfigWrapper.find('button').first()
+    const submitPolicyButton = policyConfigWrapper.find('.PolicyConfiguration-form .pf-c-button[type="submit"]')
     expect(submitPolicyButton.text()).toBe('Update Policy')
   })
 
@@ -114,7 +109,7 @@ describe('PolicyConfig Component', () => {
     const {policyConfigWrapper, props} = setup()
     const policyConfigFormProps = policyConfigWrapper.find('.PolicyConfiguration-form').first().props()
     policyConfigFormProps.onSubmit({formData: {}, schema: {}})
-    expect(props.actions.submitPolicyConfig.mock.calls.length).toBe(1)
+    expect(props.actions.submitPolicyConfig).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -135,7 +130,6 @@ describe('PolicyConfig APIcast policy', () => {
     }
 
     const props = {
-      visible: true,
       policy: policyConfig,
       actions: {
         submitPolicyConfig: jest.fn(),
@@ -157,57 +151,13 @@ describe('PolicyConfig APIcast policy', () => {
   it('should display the APIcast policy name and summary', () => {
     const {policyConfigWrapper} = setup()
     expect(policyConfigWrapper.find('section').hasClass('PolicyConfiguration')).toBe(true)
-
-    const registryProps = policyConfigWrapper.props()
-    expect(registryProps.visible).toBe(true)
     expect(policyConfigWrapper.find('.PolicyConfiguration-name').text()).toBe('APIcast')
-    expect(policyConfigWrapper.find('.PolicyConfiguration-summary').text()).toBe('Main function...')
+    expect(policyConfigWrapper.find('.PolicyConfiguration-version-and-summary').text()).toBe('builtin - Main function...')
   })
 
   it('should hide the APIcast policy form', () => {
     const {policyConfigWrapper} = setup()
 
-    expect(policyConfigWrapper.find(PolicyForm).hasClass('is-hidden')).toBe(true)
-  })
-})
-
-describe('PolicyForm', () => {
-  function setup () {
-    const props = {
-      className: 'PolicyConfiguration-form',
-      schema: {
-        properties: {
-          status: {
-            type: 'integer',
-            description: 'HTTP status code to be returned'
-          }
-        },
-        type: 'object'
-      },
-      onError: jest.fn(),
-      formData: {},
-      onSubmit: jest.fn()
-    }
-
-    const policyFormWrapper = mount(<PolicyForm {...props} />)
-
-    return {
-      props,
-      policyFormWrapper
-    }
-  }
-
-  it('should clear the errors when loading a different schema', () => {
-    const {policyFormWrapper} = setup()
-    const statusInput = policyFormWrapper.find('input')
-    statusInput.simulate('change', { target: { value: 'NaN' } })
-    const instance = policyFormWrapper.instance()
-    const event = {preventDefault: jest.fn(), persist: jest.fn()}
-
-    instance.onSubmit(event)
-    expect(policyFormWrapper.state().errors.length).toBe(1)
-
-    policyFormWrapper.setProps({schema: {}})
-    expect(policyFormWrapper.state().errors.length).toBe(0)
+    expect(policyConfigWrapper.find('Form').exists()).toBe(false)
   })
 })

@@ -1,30 +1,21 @@
 // @flow
 
-import type { UIState } from 'Policies/types/State'
-import type { FetchErrorAction, Reducer } from 'Policies/types/index'
-import type { RawPolicy, RawRegistry, RegistryPolicy, ChainPolicy } from 'Policies/types/Policies'
+import type { Reducer, ChainPolicy, IAction } from 'Policies/types'
 
-function updateObject (oldObject: Object, newValues: Object): Object {
-  return {...oldObject, ...newValues}
+function isNotApicastPolicy (policy: { name: string }): boolean {
+  return policy.name !== 'apicast'
 }
 
-function updateArray (oldArray: any, newValues: any): Array<any> {
-  return Object.assign([], oldArray, newValues)
-}
-
-function createReducer<S> (initialState: S, handlers: any): Reducer<S> {
-  return function reducer (state = initialState, action) {
+// TODO: refactor Action types, create a common interface and remove 'any' from here
+// eslint-disable-next-line flowtype/no-weak-types
+function createReducer<S> (initialState: S, handlers: {[string]: (S, any) => S}): Reducer<S> {
+  return function reducer (state: S = initialState, action: IAction) {
     if (handlers.hasOwnProperty(action.type)) {
       return handlers[action.type](state, action)
-    } else {
-      return state
     }
-  }
-}
 
-// TODO: Work with Thomas on how showing the errors if any
-function updateError (state: UIState, action: FetchErrorAction) {
-  return updateObject(state, {error: action.payload})
+    return state
+  }
 }
 
 function generateGuid (): string {
@@ -33,28 +24,18 @@ function generateGuid (): string {
       .toString(16)
       .substring(1)
   }
-  return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4()
+  return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`
 }
 
-function parsePolicies (registry: RawRegistry): Array<RegistryPolicy> {
-  let policies: Array<RegistryPolicy> = []
-  for (let key in registry) {
-    registry[key].forEach(policy => policies.push(parsePolicy(key, policy)))
-  }
-  return policies
-}
-
-function parsePolicy (key: string, policy: RawPolicy): RegistryPolicy {
-  return { ...policy, name: key, humanName: policy.name, data: {} }
-}
-
-function isPolicyChainChanged (chain: ChainPolicy[], originalChain: ChainPolicy[]) {
-  if (originalChain.length !== chain.length) {
+function isPolicyChainChanged (chain: ChainPolicy[], originalChain: ChainPolicy[]): boolean {
+  const chainLength = chain.length
+  if (originalChain.length !== chainLength) {
     return true
   }
 
-  for (const policy of chain) {
-    const originalPolicy = originalChain.find(p => p.uuid === policy.uuid)
+  for (let i = 0; i < chainLength; i++) {
+    const policy = chain[i]
+    const originalPolicy = originalChain[i]
     if (JSON.stringify(policy) !== JSON.stringify(originalPolicy)) {
       return true
     }
@@ -64,12 +45,8 @@ function isPolicyChainChanged (chain: ChainPolicy[], originalChain: ChainPolicy[
 }
 
 export {
-  updateObject,
-  updateArray,
+  isNotApicastPolicy,
   createReducer,
-  updateError,
   generateGuid,
-  parsePolicies,
-  parsePolicy,
   isPolicyChainChanged
 }

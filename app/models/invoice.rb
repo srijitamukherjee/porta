@@ -6,7 +6,9 @@ require_dependency 'month'
 # TODO: add uniqueness check on provider/buyer/period scope
 #
 class Invoice < ApplicationRecord
-  set_date_columns :due_on, :period, :issued_on, :last_charging_retry
+  %I[due_on period issued_on last_charging_retry].each do |attr|
+    attribute attr, :date
+  end
 
   MAX_CHARGE_RETRIES = 3
   DECIMALS   = 2
@@ -35,6 +37,7 @@ class Invoice < ApplicationRecord
   has_many :line_items, -> { oldest_first }, dependent: :destroy, inverse_of: :invoice
 
   has_many :payment_transactions, -> { oldest_first }, dependent: :nullify, inverse_of: :invoice
+  has_many :payment_intents, dependent: :destroy, inverse_of: :invoice
 
   has_attached_file :pdf, url: ':url_root/:class/:id/:attachment/:style/:basename.:extension'
   do_not_validate_attachment_file_type :pdf
@@ -86,8 +89,11 @@ class Invoice < ApplicationRecord
   # the invoice has to be due and at least 3 days later than the last
   # automatic charging date to be automatically chargeable
   scope :chargeable, ->(now) {
-                       where("(state = 'unpaid' OR state = 'pending') AND due_on <= ? AND
-                                      (last_charging_retry IS NULL OR last_charging_retry <= ?)", now, now - 3.days)
+    where.has do
+      ((state == 'unpaid') | (state == 'pending')) &
+        (due_on <= now) &
+        ((last_charging_retry == nil) | (last_charging_retry <= (now - 3.days)))
+    end
   }
 
   scope :opened, -> { where(:state => 'open') }
@@ -392,7 +398,7 @@ class Invoice < ApplicationRecord
 
   # REFACTOR: remove this method and replace it by open?
   def current?
-    period.is_same_month?(Time.now.utc.to_date) && !buyer_account.try!(:destroyed?)
+    period.same_month?(Time.now.utc.to_date) && !buyer_account.try!(:destroyed?)
   end
 
   def editable?
@@ -513,6 +519,10 @@ class Invoice < ApplicationRecord
 
   def chargeable?
     !reason_cannot_charge
+  end
+
+  def latest_pending_payment_intent
+    payment_intents.pending.latest.first
   end
 
   def self.opened_by_buyer(buyer)

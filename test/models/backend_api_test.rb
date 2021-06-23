@@ -21,7 +21,6 @@ class BackendApiTest < ActiveSupport::TestCase
     @account.stubs(:provider_can_use?).with(:apicast_v1).returns(true)
     @account.stubs(:provider_can_use?).with(:apicast_v2).returns(true)
     @account.expects(:provider_can_use?).with(:proxy_private_base_path).at_least_once.returns(false)
-    @account.expects(:provider_can_use?).with(:api_as_product).at_least_once.returns(false)
     @backend_api.private_endpoint = 'https://example.org:3/path'
     @backend_api.valid?
     assert_equal [@backend_api.errors.generate_message(:private_endpoint, :invalid)], @backend_api.errors.messages[:private_endpoint]
@@ -31,17 +30,16 @@ class BackendApiTest < ActiveSupport::TestCase
     assert @backend_api.valid?
   end
 
-  test '.orphans should return backend apis that do not belongs to any service' do
-    account = FactoryBot.create(:account)
-    FactoryBot.create(:service, account: account)
-    service_to_delete = FactoryBot.create(:simple_service, :with_default_backend_api, system_name: 'orphan_system', account: account)
-    orphan_backend_api = service_to_delete.backend_api_configs.first.backend_api
+  test 'allows to use http or wss protocol in private_endpoint' do
+    @backend_api.private_endpoint = 'http://example.org:3/path'
+    assert @backend_api.valid?
+    @backend_api.private_endpoint = 'https://example.org:3/path'
+    assert @backend_api.valid?
 
-    assert_equal [], BackendApi.orphans
-
-    service_to_delete.destroy!
-
-    assert_equal [orphan_backend_api], BackendApi.orphans
+    @backend_api.private_endpoint = 'ws://example.org:3/path'
+    assert @backend_api.valid?
+    @backend_api.private_endpoint = 'wss://example.org:3/path'
+    assert @backend_api.valid?
   end
 
   test '.not_used_by returns the backend apis that are not related to that service' do
@@ -91,5 +89,56 @@ class BackendApiTest < ActiveSupport::TestCase
 
     assert backend_api.account.destroy
     refute BackendApi.exists? backend_api.id
+  end
+
+  class ProxyConfigAffectingChangesTest < ActiveSupport::TestCase
+    disable_transactional_fixtures!
+
+    setup do
+      provider = FactoryBot.create(:provider_account)
+      @service = provider.first_service
+      @backend_api = FactoryBot.create(:backend_api, account: provider)
+      FactoryBot.create(:backend_api_config, backend_api: backend_api, service: service, path: '/whatever')
+      @tracked_object = ProxyConfigAffectingChanges::TrackedObject.new(backend_api)
+    end
+
+    attr_reader :service, :backend_api, :tracked_object
+
+    test 'tracks changes on update of endpoint' do
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        refute tracker.tracking?(tracked_object)
+        backend_api.update(name: 'new-name')
+        refute tracker.tracking?(tracked_object)
+        backend_api.update(api_backend: 'https://new-endpoint.test')
+        assert tracker.tracking?(tracked_object)
+      end
+    end
+
+    test 'tracks changes on destroy' do
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        refute tracker.tracking?(tracked_object)
+        backend_api.destroy
+        assert tracker.tracking?(tracked_object)
+      end
+    end
+  end
+
+  class DisableTransactionalFixturesTest < ActiveSupport::TestCase
+    disable_transactional_fixtures!
+
+    test '.orphans should return backend apis that do not belongs to any service' do
+      account = FactoryBot.create(:account)
+      FactoryBot.create(:service, account: account)
+      service_to_delete = FactoryBot.create(:simple_service, :with_default_backend_api, system_name: 'orphan_system', account: account)
+      orphan_backend_api = service_to_delete.backend_api_configs.first.backend_api
+
+      assert_equal [], BackendApi.orphans.pluck(:id)
+
+      service_to_delete.destroy!
+      assert_equal 0, orphan_backend_api.services.count
+      assert_equal 0, orphan_backend_api.backend_api_configs.count
+
+      assert_equal [orphan_backend_api.id], BackendApi.orphans.pluck(:id)
+    end
   end
 end

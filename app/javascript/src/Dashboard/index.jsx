@@ -1,9 +1,6 @@
 import $ from 'jquery'
 
 import 'Dashboard/chart'
-import toggle from 'Dashboard/toggle'
-
-export { toggle }
 
 export function widget (url) {
   $.ajax({
@@ -17,16 +14,7 @@ export function widget (url) {
       return
     }
 
-    let errorception = window._errs
     let exception = new Error(`Failed to load ${url} with ${error} (${status})`)
-
-    if (errorception) {
-      let meta = errorception.meta
-      errorception.meta = { code: xhr.status, body: xhr.responseText, status: status, error: error, url: url }
-      errorception.push(exception)
-      errorception.meta = meta
-    } else {
-      throw exception
-    }
+    throw exception
   })
 }

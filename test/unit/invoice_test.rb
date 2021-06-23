@@ -69,7 +69,10 @@ class InvoiceTest < ActiveSupport::TestCase
     time = Time.zone.now
     Timecop.freeze(time) { @invoice.finalize! }
 
-    assert_equal time.round, @invoice.finalized_at.round
+    # assert_in_delta because the time stored in database do not have usec
+    # But end of day has .999999
+    # Solution is to move from Mysql or migrate to 5.6.24+ and use precision (limit: 6) on datetime
+    assert_in_delta time, @invoice.finalized_at, 1.second
     assert @invoice.finalized?
   end
 
@@ -115,7 +118,6 @@ class InvoiceTest < ActiveSupport::TestCase
   end
 
   class AutoFriendlyIdTest < ActiveSupport::TestCase
-    disable_transactional_fixtures!
 
     def setup
       @provider = FactoryBot.create(:simple_provider)
@@ -168,7 +170,7 @@ class InvoiceTest < ActiveSupport::TestCase
     Timecop.freeze(@now = Time.zone.now) { @invoice.issue_and_pay_if_free! }
 
     assert_equal @now.utc.to_date, @invoice.issued_on
-    assert_equal @now.round, @invoice.paid_at.round
+    assert_in_delta @now, @invoice.paid_at, 1.second
     assert_equal 'paid', @invoice.state
   end
 
@@ -470,6 +472,7 @@ class InvoiceTest < ActiveSupport::TestCase
     @provider.stubs(:payment_gateway_configured?).returns(true)
     @billing.create_line_item!(name: 'Fake', cost: 1.233, description: 'really', quantity: 1)
     @invoice.update_attribute(:state, 'pending')
+    @invoice.expects(:notify_buyer_about_payment)
 
     assert @invoice.charge!, 'Invoice should charge!'
   end
@@ -521,7 +524,6 @@ class InvoiceTest < ActiveSupport::TestCase
   end
 
   class CounterUpdateTest < ActiveSupport::TestCase
-    disable_transactional_fixtures!
 
     def setup
       @provider = FactoryBot.create(:simple_provider)

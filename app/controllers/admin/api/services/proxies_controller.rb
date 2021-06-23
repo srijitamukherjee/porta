@@ -39,7 +39,7 @@ class Admin::Api::Services::ProxiesController < Admin::Api::Services::BaseContro
   ##~ op.parameters.add @parameter_access_token
   ##~ op.parameters.add @parameter_service_id_by_id_name
   ##~ op.parameters.add name: "endpoint", description: "Public Base URL for production environment.", dataType: "string", paramType: "query", required: false
-  ##~ op.parameters.add name: "api_backend", description: "Private Base URL.", dataType: "string", paramType: "query", required: false
+  ##~ op.parameters.add name: "api_backend", description: "Private Base URL. Caution! Do not use it if the account has API as a Product enabled. It may cause API backend usages to be removed from the Product.", dataType: "string", paramType: "query", required: false
   ##~ op.parameters.add name: "credentials_location", description: "Credentials Location. Either headers, query or authorization for the Basic Authorization.", dataType: "string", paramType: "query", required: false
   ##~ op.parameters.add name: "auth_app_key", description: "Parameter/Header where App Key is expected.", dataType: "string", paramType: "query", required: false
   ##~ op.parameters.add name: "auth_app_id", description: "Parameter/Header where App ID is expected.", dataType: "string", paramType: "query", required: false
@@ -63,13 +63,25 @@ class Admin::Api::Services::ProxiesController < Admin::Api::Services::BaseContro
   ##~ op.parameters.add name: "jwt_claim_with_client_id_type", description: "JWT Claim With ClientId Type. Either `plain` or `liquid`", dataType: "string", paramType: "query", required: false
   #
   def update
-    if proxy.update_attributes(proxy_params)
-      if proxy.service_mesh_integration?
-        proxy.deploy!
-      elsif proxy.apicast_configuration_driven
-        proxy.deploy_v2
-      end
-    end
+    ProxyDeploymentService.call(proxy) if proxy.update_attributes(proxy_params)
+
+    respond_with(proxy)
+  end
+
+  ##~ e = sapi.apis.add
+  ##~ e.path = "/admin/api/services/{service_id}/proxy/deploy.xml"
+  ##~ e.responseClass = "proxy"
+  #
+  ##~ op            = e.operations.add
+  ##~ op.httpMethod = "POST"
+  ##~ op.summary    = "Proxy Deploy"
+  ##~ op.description = "Promotes the APIcast configuration to the Staging Environment (Production Environment in case of Service Mesh)."
+  ##~ op.group = "proxy"
+  #
+  ##~ op.parameters.add @parameter_access_token
+  ##~ op.parameters.add @parameter_service_id_by_id_name
+  def deploy
+    ProxyDeploymentService.call(proxy)
 
     respond_with(proxy)
   end

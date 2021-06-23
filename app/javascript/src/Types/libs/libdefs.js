@@ -1,11 +1,7 @@
 // @flow
 
-// TODO: remove this workaround, necessary for module.hot to work
-declare var module: {
-  hot: {
-    accept(path: string, callback: () => void): void
-  }
-}
+// Disabling all weak-type checks since this file is a workaround for missing types
+/* eslint-disable flowtype/no-weak-types */
 
 // TODO: remove these module declarations when not failing
 declare module 'whatwg-fetch' {
@@ -31,5 +27,21 @@ declare module 'core-js/fn/symbol' {
 
 }
 
-// eslint-disable-next-line flowtype/no-weak-types
+declare module 'swagger-ui-react' {
+  declare module.exports: any;
+}
+
+declare module 'validate.js' {
+  declare module.exports: any;
+}
+
+declare module 'jquery' {
+  declare module.exports: JQueryStatic & {
+    flash: {
+      notice: (msg: string) => void,
+      error: (msg: string) => void
+    }
+  };
+}
+
 export type Window = any

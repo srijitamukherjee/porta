@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class Finance::BillingStrategy < ApplicationRecord
+  class BillingError < StandardError
+  end
+
   module NonAuditedColumns
     def non_audited_columns
       super - [inheritance_column]
@@ -15,18 +18,7 @@ class Finance::BillingStrategy < ApplicationRecord
 
   attr_reader :failed_buyers
 
-  CURRENCIES = {
-    'USD - American Dollar' => 'USD',
-    'EUR - Euro'=> 'EUR',
-    'GBP - British Pound' => 'GBP',
-    'NZD - New Zealand dollar' => 'NZD',
-    'CNY - Chinese Yuan Renminbi' => 'CNY',
-    'CAD - Canadian Dollar' => 'CAD',
-    'AUD - Australian Dollar' => 'AUD',
-    'JPY - Japanese Yen' => 'JPY',
-    'CHF - Swiss Franc' => 'CHF',
-    'SAR - Saudi Riyal' => 'SAR'
-  }.freeze
+  CURRENCIES = CurrenciesLoader.load_config.freeze
 
   belongs_to :account
   alias_attribute :provider, :account
@@ -34,7 +26,7 @@ class Finance::BillingStrategy < ApplicationRecord
   attr_protected :account_id, :tenant_id, :audit_ids
 
   accepts_nested_attributes_for :account
-  validates :currency, inclusion: { :in => CURRENCIES.values }
+  validates :currency, inclusion: { in: CURRENCIES.values, message: :invalid }
 
   # TODO: uncomment when factories are fixed
   # validates_presence_of :account
@@ -104,9 +96,8 @@ class Finance::BillingStrategy < ApplicationRecord
         message = "BillingStrategy #{id}(#{name}) failed utterly"
 
         Rails.logger.error(message)
-        airbrake(:error_message => message,
-                 :error_class => 'BillingError',
-                 :exception => e)
+
+        System::ErrorReporting.report_error(e, :error_message => message, :error_class => 'BillingError')
 
         raise e
       end
@@ -185,8 +176,8 @@ class Finance::BillingStrategy < ApplicationRecord
     id_prefix = billing_monthly? ? month : month.begin.year
 
     last_of_period = Invoice.by_provider(account)
-                         .with_normalized_friendly_id(numbering_period, month)
-                         .first
+                            .with_normalized_friendly_id(numbering_period, month)
+                            .first
     order = if last_of_period
               last_of_period.friendly_id.split('-').last
             else
@@ -213,15 +204,15 @@ class Finance::BillingStrategy < ApplicationRecord
   end
 
   def warning(txt, buyer = nil)
-    LogEntry.log( :warning, txt, self.account_id, buyer)
+    LogEntry.log(:warning, txt, self.account_id, buyer)
   end
 
   def error(txt, buyer = nil)
-    LogEntry.log( :error, txt, self.account_id, buyer)
+    LogEntry.log(:error, txt, self.account_id, buyer)
   end
 
   def info(txt, buyer = nil)
-    LogEntry.log( :info, txt, self.account_id, buyer)
+    LogEntry.log(:info, txt, self.account_id, buyer)
   end
 
   protected
@@ -232,7 +223,6 @@ class Finance::BillingStrategy < ApplicationRecord
     now = days.shift
     yield if days.include?(now.day)
   end
-
 
   def bill_expired_trials(buyer, now)
     buyer.billable_contracts_with_trial_period_expired(now - 1.day).find_each(batch_size: 50) do |contract|
@@ -350,15 +340,17 @@ class Finance::BillingStrategy < ApplicationRecord
   private
 
   # Yields a block for each buyer, passing it as a parameter. If an
-  # exception occurs meanwhile, catches it and reports by airbrake.
+  # exception occurs meanwhile, catches and reports it.
   #
   def bill_and_charge_each(options = {})
     buyer_ids = options[:buyer_ids]
     @failed_buyers = []
 
     if provider.nil?
-      airbrake(:error_message => "WARNING: tried to use billing strategy #{self.id} which has no account",
-               :error_class => 'InvalidData')
+
+      message = "WARNING: tried to use billing strategy #{self.id} which has no account"
+      exception = BillingError.new message
+      System::ErrorReporting.report_error(exception, :error_message => message, :error_class => 'InvalidData')
       return
     end
 
@@ -374,10 +366,10 @@ class Finance::BillingStrategy < ApplicationRecord
 
         msg = "Failed to bill or charge #{name}(#{buyer_id}) of provider(#{provider_id}): #{exception.message}\n"
         error(msg, buyer)
-        airbrake(:error_message => msg,
-                 :error_class => 'BillingError',
-                 :parameters => { :buyer_id => buyer_id, :provider_id => provider_id },
-                 :exception => exception)
+        System::ErrorReporting.report_error(exception, :error_message => msg,
+                                            :error_class => 'BillingError',
+                                            :parameters => { :buyer_id => buyer_id, :provider_id => provider_id }
+        )
 
         @failed_buyers << buyer_id
         raise if Rails.env.test?
@@ -410,17 +402,7 @@ class Finance::BillingStrategy < ApplicationRecord
     )
   end
 
-  module ErrorHandling
-    def airbrake(*args)
-      if Rails.env.production? || Rails.env.preview?
-        System::ErrorReporting.report_error(*args)
-      end
-    end
-  end
-
-  # so that we have #airbrake as instance AND class method
-  extend ErrorHandling
-  include ErrorHandling
+  delegate :report_error, to: 'System::ErrorReporting'
 
   module FindEachFix
     # HACK: to overcome find_each scoping, we reset the scope
@@ -429,7 +411,7 @@ class Finance::BillingStrategy < ApplicationRecord
     end
   end
 
-  extend  FindEachFix
+  extend FindEachFix
   include FindEachFix
 end
 

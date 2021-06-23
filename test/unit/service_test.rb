@@ -2,6 +2,20 @@ require 'test_helper'
 
 class ServiceTest < ActiveSupport::TestCase
 
+  test '#accessible?' do
+    service = Service.new
+
+    Service.state_machine.states.each do |state|
+      service.state = state.name.to_s
+
+      if service.state == Service::DELETE_STATE
+        refute service.accessible?
+      else
+        assert service.accessible?
+      end
+    end
+  end
+
   def test_create_default_proxy
     Service.any_instance.expects(:create_proxy!).at_least_once
     FactoryBot.create(:simple_service, proxy: nil)
@@ -99,29 +113,6 @@ class ServiceTest < ActiveSupport::TestCase
     assert_raise(ActiveRecord::RecordNotFound) { service.reload }
   end
 
-  def test_update_account_default_service
-    default_service = FactoryBot.create(:simple_service)
-    other_service   = FactoryBot.create(:simple_service)
-    account         = FactoryBot.create(:simple_account,
-                                         services: [default_service, other_service],
-                                         default_service_id: default_service.id)
-
-    assert_equal account.default_service_id, default_service.id
-
-    other_service.destroy
-
-    account.reload
-
-    assert_equal default_service.id, account.default_service_id
-
-    default_service.destroy_default
-    assert default_service.destroyed?
-
-    account.reload
-
-    assert_nil account.default_service_id
-  end
-
   test 'backend_authentication_type' do
     service = Service.new(account: account = Account.new)
 
@@ -146,7 +137,7 @@ class ServiceTest < ActiveSupport::TestCase
 
   test 'service_token' do
     account = FactoryBot.create(:simple_account)
-    service = Service.new { |s| s.account_id = account.id; s.system_name = 'foo' }
+    service = Service.new { |s| s.account = account; s.system_name = 'foo' }
     service.save(validate: false)
 
     refute service.service_token
@@ -158,19 +149,6 @@ class ServiceTest < ActiveSupport::TestCase
 
   test 'has friendly human attribute names' do
     assert_equal 'URL', Service.human_attribute_name('friendly_id')
-  end
-
-  should 'not be able to disable end user registration' do
-    @service = Service.create!(:account => FactoryBot.create(:simple_provider), :name => 'PandaCam')
-    @service.end_user_registration_required = false
-
-    assert @service.invalid?
-    assert @service.errors[:end_user_registration_required].presence
-
-    @service.account.settings.allow_end_users!
-    @service.reload
-
-    assert @service.valid?
   end
 
   should 'be in incomplete state' do
@@ -310,12 +288,14 @@ class ServiceTest < ActiveSupport::TestCase
     assert service.errors.present?
   end
 
-  test "#destroy_default destroys a default service" do
-    provider = FactoryBot.create :provider_account
-    service  = provider.default_service
+  test '#plugin_deployment? returns true when using a plugin as deployment option' do
+    service = FactoryBot.build(:service, deployment_option: 'plugin_ruby')
 
-    service.destroy_default
-    assert_raise(ActiveRecord::RecordNotFound) { service.reload }
+    assert service.plugin_deployment?
+
+    service = FactoryBot.build(:service, deployment_option: 'hosted')
+
+    refute service.plugin_deployment?
   end
 
   def test_default_service_plan
@@ -355,8 +335,6 @@ class ServiceTest < ActiveSupport::TestCase
 
   class DestroyingServiceTest < ActiveSupport::TestCase
 
-    disable_transactional_fixtures!
-
     test "destroying service destroys it's plans" do
       service          = FactoryBot.create(:service)
       service_plan     = FactoryBot.create(:application_plan, issuer: service)
@@ -388,9 +366,10 @@ class ServiceTest < ActiveSupport::TestCase
 
     test 'destroying service creates a related event' do
       service = FactoryBot.create(:simple_service)
+      service.stubs(destroyed_by_association: true)
       service_id = service.id
       assert_difference(RailsEventStoreActiveRecord::Event.where(event_type: Services::ServiceDeletedEvent).method(:count)) do
-        assert service.destroy_default
+        service.destroy!
       end
       event = RailsEventStoreActiveRecord::Event.where(event_type: Services::ServiceDeletedEvent).last!
       assert_equal service_id, event.data['service_id']
@@ -553,8 +532,6 @@ class ServiceTest < ActiveSupport::TestCase
   end
 
   class AsynchronousDeletionOfService < ActiveSupport::TestCase
-    disable_transactional_fixtures!
-
     test 'schedule destruction of a service' do
       service = FactoryBot.create(:simple_service)
       service.stubs(last_accessible?: false)
@@ -622,17 +599,19 @@ class ServiceTest < ActiveSupport::TestCase
     assert service.persisted?
   end
 
-  test '.permitted_for_user' do
-    FactoryBot.create_list(:simple_service, 2)
-    user = User.new
+  test '.permitted_for' do
+    account = FactoryBot.create(:simple_provider)
+    FactoryBot.create_list(:simple_service, 2, account: account)
+    user = FactoryBot.create(:member, account: account)
     member_permission_service_ids = [Service.last.id]
     user.stubs(member_permission_service_ids: member_permission_service_ids)
 
     user.stubs(forbidden_some_services?: false)
-    assert_same_elements Service.pluck(:id), Service.permitted_for_user(user).pluck(:id)
+    assert_same_elements account.services.pluck(:id), Service.permitted_for(user).pluck(:id)
 
     user.stubs(forbidden_some_services?: true)
-    assert_same_elements member_permission_service_ids, Service.permitted_for_user(user).pluck(:id)
+    assert_same_elements member_permission_service_ids, Service.permitted_for(user).pluck(:id)
+    assert_same_elements Service.pluck(:id), Service.permitted_for.pluck(:id)
   end
 
 
@@ -692,6 +671,38 @@ class ServiceTest < ActiveSupport::TestCase
       refute_includes plugins, 'self_managed'
       refute_includes plugins, 'hosted'
       assert_includes plugins, 'plugin_ruby'
+    end
+  end
+
+  class ProxyConfigAffectingChangesTest < ActiveSupport::TestCase
+    test 'does not track changes on build' do
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        service = FactoryBot.build(:simple_service) # backend_version not touched
+        refute tracker.tracking?(ProxyConfigAffectingChanges::TrackedObject.new(service))
+      end
+    end
+
+    test 'tracks changes on backend_version' do
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        service = FactoryBot.create(:simple_service)
+        tracker.flush
+
+        service.expects(:track_proxy_affecting_changes).never
+        service.update_attribute(:name, 'new name')
+
+        service.expects(:track_proxy_affecting_changes).once
+        service.update_attribute(:backend_version, 'oauth')
+      end
+    end
+
+    test 'tracks changes on destroy' do
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        service = FactoryBot.create(:simple_service)
+        tracker.flush
+
+        service.expects(:track_proxy_affecting_changes).once
+        service.destroy
+      end
     end
   end
 end

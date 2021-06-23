@@ -2,8 +2,9 @@
 class Metric < ApplicationRecord
   include Backend::ModelExtensions::Metric
   include SystemName
-  include ArchiveDeletionBelongingToService
   include BackendApiLogic::MetricExtension
+
+  self.background_deletion = %i[pricing_rules usage_limits plan_metrics proxy_rules]
 
   before_destroy :destroyable?
   before_validation :associate_to_service_of_parent, :fill_owner
@@ -44,6 +45,10 @@ class Metric < ApplicationRecord
   default_scope -> { order(:id) }
   scope :top_level, -> { where(parent_id: nil) }
   scope :order_by_unit, -> { order('unit') }
+
+  scope :by_provider, ->(provider) {
+    where.has { ((owner_type == 'Service') & owner_id.in(provider.services.pluck(:id))) | ((owner_type == 'BackendApi') & owner_id.in(provider.backend_apis.pluck(:id))) }
+  }
 
   # Create one of the predefined, default metrics.
   #

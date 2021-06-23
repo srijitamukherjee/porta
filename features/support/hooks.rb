@@ -1,16 +1,4 @@
-require 'color'
-
-Before '@fakeweb' do
-  WebMock.disable!
-end
-
-After '@fakeweb' do
-  WebMock.enable!
-end
-
-Before '@fakeweb', '@selenium,@javascript' do
-  raise '@fakeweb and @selenium or @javascript is not allowed combination of tags. FakeWeb breaks things.'
-end
+# frozen_string_literal: true
 
 Before '@ignore-backend' do
   stub_backend_get_keys
@@ -76,18 +64,8 @@ Before('@saas-only') do
   raise ::Cucumber::Core::Test::Result::Skipped, 'SaaS only features do not support OracleDB' if System::Database.oracle?
 end
 
-Before '@selenium', '~@javascript' do
-  abort 'Running with @selenium tag without @javascript is not supported'
-  exit!
-end
-
 Before '~@javascript' do
   Timecop.scale(100)
-end
-
-# run before javascript tests not tagged with selenium
-AfterStep '@javascript', '@alert', '~@selenium' do
-  stub_javascript_alert
 end
 
 Before '@javascript' do
@@ -131,8 +109,38 @@ After do |scenario|
   end
 
   folder = folder.expand_path(root)
-  next
-  line_number = scenario.line.to_s
+
+  line_number = scenario.location.line.to_s
+
+  # Network logs
+  if page.driver.browser.respond_to?(:manage)
+    logs = page.driver.browser.manage.logs.get(:performance)
+    array = logs.each_with_object([]) do |entry, messages|
+      message = JSON.parse(entry.message)
+      # next unless message.dig('message', 'params', 'documentURL').to_s.end_with? '/p/login'
+      messages << message
+    end
+
+    file = folder.join("#{line_number}-network.json")
+    file.open('w') do  |f|
+      f.puts JSON.dump(array)
+    end
+
+
+    console_log = folder.join("#{line_number}.log")
+
+    if (logs = page.driver.browser.manage.logs.get(:browser)).present?
+      entries = logs.map{ |entry| "[#{entry.level}] #{entry.message}" }
+
+      puts *entries
+      console_log.open('w') do |f|
+        f.puts *entries
+      end
+
+      print "Saved console log to #{console_log}\n"
+    end
+
+  end
 
   if (ex = scenario.try(:exception)) # `try` so it does not raise on undefined method
     file = folder.join("#{line_number}.txt")
@@ -151,32 +159,6 @@ After do |scenario|
     end
 
     print "Saved exception with backtrace to #{file}\n"
-  end
-
-  console_log = folder.join("#{line_number}.log")
-
-  # # selenium 3 broke logs
-  # if (logs = page.driver.browser.try(:manage).try(:logs))
-  #     binding.pry
-  #   if (entries = logs.get(:browser).presence)
-  #     console_log.open('w') do |f|
-  #       f.puts *entries
-  #     end
-  #
-  #     print "Saved console log to #{console_log}\n"
-  #   end
-  # end
-
-
-  if (logs = page.driver.browser.try(:console_messages)).present?
-    entries = logs.map{ |entry| "#{entry[:message]} (#{entry[:source]}:#{entry[:line_number]}" }
-
-    puts *entries
-    console_log.open('w') do |f|
-      f.puts *entries
-    end
-
-    print "Saved console log to #{console_log}\n"
   end
 
   begin
@@ -207,6 +189,38 @@ Before '@braintree' do
       .to_return(status: 200, body: '', headers: {})
 end
 
+Before '@stripe' do
+  customer_response_body = <<~JSON.strip
+    {
+      "id": "cus_IiIMv3fS4LCHwE",
+      "object": "customer",
+      "deleted": false
+    }
+  JSON
+  stub_request(:post, 'https://api.stripe.com/v1/customers').to_return(status: 201, body: customer_response_body, headers: {})
+  stub_request(:get, 'https://api.stripe.com/v1/customers/valid_code').to_return(status: 200, body: customer_response_body, headers: {})
+
+  setup_intent_response_body = <<~JSON.strip
+    {
+      "id": "seti_1I6ggZIxGJbGz9puMkwMqBIP",
+      "object": "setup_intent",
+      "client_secret": "seti_1I6ggZIxGJbGz9puMkwMqBIP_secret_Ii6uDTQkCnWeOOONQVHxoaSkblEG8wk",
+      "customer": "cus_IiIMv3fS4LCHwE",
+      "payment_method_options": {
+        "card": {
+          "request_three_d_secure": "automatic"
+        }
+      },
+      "payment_method_types": [
+        "card"
+      ],
+      "status": "requires_payment_method",
+      "usage": "off_session"
+    }
+  JSON
+  stub_request(:post, 'https://api.stripe.com/v1/setup_intents').to_return(status: 201, body: setup_intent_response_body, headers: {})
+end
+
 Before '@webhook' do
   stub_request(:any, %r{google.com}).to_return(status: 200, body: '')
 end
@@ -222,13 +236,13 @@ current_step = ->(scenario) do
   [ steps[index], steps[index+1] ]
 end
 
-print_banner = -> (title, step) do
+print_banner = ->(title, step) do
   step_name = (step.try(:actual_keyword) || step.keyword) + step.name
-  Rails.logger.info <<-NEXT
+  Rails.logger.info <<~NEXT
 
-| #{title}: #{Color::BOLD}#{step_name}#{Color::CLEAR} |
-| #{'=' * (step_name.length + title.length + 2)} |
-#{step.multiline_arg}
+    | #{title}: #{step_name.bold} |
+    | #{'=' * (step_name.length + title.length + 2)} |
+    #{step.multiline_arg}
 NEXT
 end
 

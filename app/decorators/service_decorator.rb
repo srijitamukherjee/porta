@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 class ServiceDecorator < ApplicationDecorator
-
   self.include_root_in_json = false
 
   def link_to_application_plans
@@ -33,10 +32,10 @@ class ServiceDecorator < ApplicationDecorator
   end
 
   def published_application_plans
-    PlanDecorator.decorate_collection(application_plans.stock.published, context: { service: self })
+    ApplicationPlanDecorator.decorate_collection(application_plans.stock.published, context: { service: self })
   end
 
-  def api_selector_api_link
+  def service_path
     if h.can?(:manage, :plans)
       h.admin_service_path(object)
     elsif h.can?(:manage, :monitoring)
@@ -46,14 +45,63 @@ class ServiceDecorator < ApplicationDecorator
     end
   end
 
-  def as_json(options = {})
-    hash = super(options)
-    parse_api hash
+  def table_data
+    {
+      name: name,
+      description: system_name,
+      href: service_path
+    }
+  end
+
+  alias link service_path
+
+  def new_application_data
+    {
+      id: id.to_s,
+      name: name,
+      systemName: system_name,
+      updatedAt: updated_at,
+      appPlans: plans.stock.select(:id, :name).as_json(root: false),
+      servicePlans: service_plans.select(:id, :name).as_json(root: false),
+      defaultServicePlan: default_service_plan.as_json(root: false, only: %i[id name])
+    }
+  end
+
+  def backends_table_data
+    BackendApiDecorator.decorate_collection(backend_apis)
+                       .map(&:table_data)
+                       .to_json
   end
 
   private
 
   def backend_api?
     false
+  end
+
+  def links
+    [
+      { name: 'Edit', path: h.edit_admin_service_path(object) },
+      { name: 'Overview', path: h.admin_service_path(object) },
+      { name: 'Analytics', path: h.admin_service_stats_usage_path(object) },
+      { name: 'Applications', path: h.admin_service_applications_path(object) },
+      { name: 'ActiveDocs', path: h.admin_service_api_docs_path(object) },
+      { name: 'Integration', path: h.admin_service_integration_path(object) },
+    ]
+  end
+
+  def apps_count
+    cinstances.size
+  end
+
+  def backends_count
+    backend_api_configs.size
+  end
+
+  def unread_alerts_count
+    account.buyer_alerts
+           .by_service(object)
+           .unread
+           .size
   end
 end

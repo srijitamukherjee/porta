@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'ipaddr'
 require 'resolv'
 
@@ -6,7 +8,11 @@ class Proxy < ApplicationRecord
   include BackendApiLogic::ProxyExtension
   prepend BackendApiLogic::RoutingPolicy
   include GatewaySettings::ProxyExtension
-  include ProxyConfigAffectingChanges::ProxyExtension
+  include ProxyConfigAffectingChanges::ModelExtension
+
+  define_proxy_config_affecting_attributes except: %i[api_test_path api_test_success lock_version]
+
+  self.background_deletion = [:proxy_rules, [:proxy_configs, { action: :delete }], [:oidc_configuration, { action: :delete, has_many: false }]]
 
   DEFAULT_POLICY = { 'name' => 'apicast', 'humanName' => 'APIcast policy', 'description' => 'Main functionality of APIcast.',
                      'configuration' => {}, 'version' => 'builtin', 'enabled' => true, 'removable' => false, 'id' => 'apicast-policy'  }.freeze
@@ -19,15 +25,18 @@ class Proxy < ApplicationRecord
   has_one :oidc_configuration, dependent: :delete, inverse_of: :oidc_configurable, as: :oidc_configurable
   accepts_nested_attributes_for :oidc_configuration
 
+  has_one :proxy_config_affecting_change, dependent: :delete
+  private :proxy_config_affecting_change
+  after_commit :create_proxy_config_affecting_change, on: :create
+
   validates :error_status_no_match, :error_status_auth_missing, :error_status_auth_failed, :error_status_limits_exceeded, presence: true
 
   uri_pattern = URI::DEFAULT_PARSER.pattern
 
-  URI_OPTIONAL_PORT = /\Ahttps?:\/\/[a-zA-Z0-9._-]*(:\d+)?\Z/
   URI_OR_LOCALHOST  = /\A(https?:\/\/([a-zA-Z0-9._:\/?-])+|.*localhost.*)\Z/
   OPTIONAL_QUERY_FORMAT = "(?:\\?(#{uri_pattern.fetch(:QUERY)}))?"
   URI_PATH_PART = Regexp.new('\A' + uri_pattern.fetch(:ABS_PATH) + OPTIONAL_QUERY_FORMAT + '\z')
-  HOSTNAME = Regexp.new('\A' + uri_pattern.fetch(:HOSTNAME) + '\z')
+  HOST = Regexp.new('\A' + uri_pattern.fetch(:HOSTNAME) + '(:\d+)?' + '\z')
 
   OAUTH_PARAMS = /(\?|&)(scope=|state=|tok=)/
 
@@ -40,17 +49,14 @@ class Proxy < ApplicationRecord
     rest: I18n.t(:rest, scope: 'proxy.oidc_issuer_type').freeze,
   }.freeze
 
-  # Remove api_backend
-  def self.columns
-    super.reject {|column| /\Aapi_backend\Z/ =~ column.name }
-  end
   reset_column_information
 
   validates :api_test_path,    format: { with: URI_PATH_PART,      allow_nil: true, allow_blank: true }
-  validates :endpoint,         format: { with: URI_OPTIONAL_PORT,  allow_nil: true, allow_blank: true }
-  validates :sandbox_endpoint, format: { with: URI_OPTIONAL_PORT , allow_nil: true, allow_blank: true }
 
-  validates :hostname_rewrite, format: { with: HOSTNAME,           allow_nil: true, allow_blank: true }
+  validates :endpoint,         uri: true, allow_nil: true, allow_blank: true
+  validates :sandbox_endpoint, uri: true, allow_nil: true, allow_blank: true
+
+  validates :hostname_rewrite, format: { with: HOST, allow_nil: true, allow_blank: true }
 
   validates :oauth_login_url, format: { with: URI_OR_LOCALHOST,    allow_nil: true, allow_blank: true }
 
@@ -88,8 +94,8 @@ class Proxy < ApplicationRecord
   after_create :create_default_proxy_rule
 
   before_create :force_apicast_version
-  before_create :set_sandbox_endpoint
-  before_create :set_production_endpoint
+  before_validation :set_sandbox_endpoint, on: :create
+  before_validation :set_production_endpoint, on: :create
 
   validates :sandbox_endpoint, presence: true, on: :update, if: :require_staging_endpoint?
   validates :endpoint, presence: true, on: :update, if: :require_production_endpoint?
@@ -107,6 +113,7 @@ class Proxy < ApplicationRecord
   delegate :account, to: :service
   delegate :provider_can_use?, to: :account
   delegate :backend_apis, :backend_api_configs, to: :service
+  delegate :scheduled_for_deletion?, to: :account, allow_nil: true
 
   def self.user_attribute_names
     super + %w[api_backend] + GatewayConfiguration::ATTRIBUTES
@@ -125,8 +132,8 @@ class Proxy < ApplicationRecord
   end
 
   def policies_config
-    attr_policies_config = read_attribute(:policies_config)
-    parsed_config = attr_policies_config.blank? ? [] : Array(JSON.parse(attr_policies_config))
+    parsed_config = read_and_parse_policies_config
+    return parsed_config if errors[:policies_config].present?
 
     if parsed_config.detect { |c| c['name'] == DEFAULT_POLICY['name'] }
       parsed_config
@@ -190,6 +197,10 @@ class Proxy < ApplicationRecord
 
     def default_production_endpoint; end
 
+    def default_staging_endpoint_apiap; end
+
+    def default_production_endpoint_apiap; end
+
     protected
 
     delegate :provider, to: :service
@@ -202,11 +213,13 @@ class Proxy < ApplicationRecord
     def generate(name)
       template = config.fetch(name.try(:to_sym)) { return }
 
-      format template, {
+      uri = format template, {
         system_name: service.parameterized_system_name, account_id: service.account_id,
         tenant_name: provider_subdomain,
         env: proxy.proxy_env, port: proxy.proxy_port
       }
+
+      UriShortener.call(uri).to_s
     end
   end
 
@@ -227,20 +240,32 @@ class Proxy < ApplicationRecord
       production_endpoint = proxy.apicast_configuration_driven ? :apicast_production_endpoint : :hosted_proxy_endpoint
       generate(production_endpoint)
     end
+
+    def default_staging_endpoint_apiap
+      default_staging_endpoint
+    end
+
+    def default_production_endpoint_apiap
+      default_production_endpoint
+    end
   end
 
   # @return DeploymentStrategy
   def deployment_strategy
     strategy = case deployment_option
-               when 'self_managed'.freeze then SelfManagedAPIcast
-               when 'hosted'.freeze then HostedAPIcast
+               when 'self_managed' then SelfManagedAPIcast
+               when 'hosted' then HostedAPIcast
                end
 
     strategy.try!(:new, self)
   end
 
+  def deployment_strategy_apiap
+    HostedAPIcast.new self
+  end
+
   def oidc?
-    provider&.provider_can_use?(:apicast_oidc) && authentication_method.to_s == 'oidc'.freeze
+    provider&.provider_can_use?(:apicast_oidc) && authentication_method.to_s == 'oidc'
   end
 
   # beware that in the on-prem product deployment option is 'hosted'
@@ -302,24 +327,12 @@ class Proxy < ApplicationRecord
     end
   end
 
-  def save_and_async_deploy(attrs, user)
-    saved = update_attributes(attrs)
-
-    analytics.track('Sandbox Proxy updated', analytics_attributes.merge(success: saved))
-
-    saved && async_deploy(user)
-  end
-
-  def async_deploy(user)
-    ProviderProxyDeploymentService.async_deploy(user, self)
-  end
-
   def hosts
     [endpoint, sandbox_endpoint].map do |endpoint|
       begin
-        URI(endpoint || ''.freeze).host
+        URI(endpoint || '').host
       rescue ArgumentError, URI::InvalidURIError
-        'localhost'.freeze
+        'localhost'
       end
     end.compact.uniq
   end
@@ -340,11 +353,11 @@ class Proxy < ApplicationRecord
 
     analytics.track('Sandbox Proxy updated', analytics_attributes.merge(success: saved))
 
-    saved && deploy
-  end
+    return false unless saved
 
-  def deploy!
-    deploy
+    success = ProxyDeploymentService.call(self, v1_compatible: true)
+    analytics.track('Sandbox Proxy Deploy', success: success)
+    success
   end
 
   def authentication_params_for_proxy(opts = {})
@@ -369,49 +382,8 @@ class Proxy < ApplicationRecord
     service.oauth? || saas_configuration_driven_apicast_self_managed?
   end
 
-  def send_api_test_request!
-    proxy_test_service = ProxyTestService.new(self)
-
-    return true if proxy_test_service.disabled?
-
-    if skip_test_request?
-      update_column(:api_test_success, nil)
-      return true
-    end
-
-    result = proxy_test_service.perform
-
-    success = result.success?
-
-    update_column(:api_test_success, success)
-
-    error, description = result.error
-
-    if error && description
-      errors.add(:api_test_path, "<b>#{error}</b>: #{CGI.escapeHTML(description)}")
-    end
-
-    analytics.track 'Sandbox Proxy Test Request',
-                    analytics_attributes.merge(
-                        success: success,
-                        uri: result.uri.to_s,
-                        status: result.code
-                    )
-
-    success
-  end
-
   def enabled
     !!self.deployed_at
-  end
-
-  def sandbox_deployed?
-    proxy_log = provider.proxy_logs.latest_first.first or return sandbox_config_saved?
-    proxy_log.created_at > self.created_at && proxy_log.status == ProviderProxyDeploymentService::SUCCESS_MESSAGE
-  end
-
-  def sandbox_config_saved?
-    proxy_configs.sandbox.exists?
   end
 
   def endpoint_port
@@ -425,28 +397,8 @@ class Proxy < ApplicationRecord
       (self.api_backend ? URI(self.api_backend).host : 'none')
   end
 
-  def deploy_production
-    if apicast_configuration_driven
-      deploy_production_v2
-    elsif ready_to_deploy?
-      provider.deploy_production_apicast
-    end
-  end
-
   def ready_to_deploy?
     api_test_success
-  end
-
-  def deploy_v2
-    deployment = ApicastV2DeploymentService.new(self)
-
-    deployment.call(environment: 'sandbox'.freeze)
-  end
-
-  def deploy_production_v2
-    newest_sandbox_config = proxy_configs.sandbox.newest_first.first
-
-    newest_sandbox_config.clone_to(environment: :production) if newest_sandbox_config
   end
 
   def set_correct_endpoints
@@ -471,6 +423,9 @@ class Proxy < ApplicationRecord
   delegate :default_production_endpoint, :default_staging_endpoint,
            to: :deployment_strategy, allow_nil: true
 
+  delegate :default_production_endpoint_apiap, :default_staging_endpoint_apiap,
+           to: :deployment_strategy_apiap, allow_nil: true
+
   delegate :backend_version, to: :service, prefix: true
 
 
@@ -492,16 +447,16 @@ class Proxy < ApplicationRecord
   end
 
   def provider
-    @provider ||= self.service.account
+    @provider ||= self.service&.account
   end
 
   PROXY_ENV = {
-    preview: 'pre.'.freeze,
-    production: ''.freeze
+    preview: 'pre.',
+    production: ''
   }.freeze
 
   def proxy_env
-    PROXY_ENV.fetch(Rails.env.to_sym, ''.freeze)
+    PROXY_ENV.fetch(Rails.env.to_sym, '')
   end
 
   def proxy_port
@@ -516,17 +471,46 @@ class Proxy < ApplicationRecord
     Service::DeploymentOption.service_mesh.include?(deployment_option)
   end
 
+  # Ridiculously hacking Rails to skip lock increment on touch
+  def touch(*)
+    @instance_locking_enabled = false
+    super
+  ensure
+    remove_instance_variable(:@instance_locking_enabled)
+  end
+
+  def locking_enabled?
+    return @instance_locking_enabled if instance_variable_defined? :@instance_locking_enabled
+    super
+  end
+
+  def affecting_change_history
+    proxy_config_affecting_change || create_proxy_config_affecting_change
+  end
+
+  def pending_affecting_changes?
+    return unless apicast_configuration_driven?
+    config = proxy_configs.sandbox.newest_first.first
+    return false unless config
+    config.created_at < affecting_change_history.updated_at
+  end
+
+  def proxy
+    self
+  end
+
   protected
 
   class PolicyConfig
     include ActiveModel::Validations
 
     attr_accessor :name, :version, :configuration, :enabled
+
     validates :name, :version, presence: true
     validate :configuration_is_object
 
     def initialize(attributes = {})
-      self.attributes = attributes
+      self.attributes = attributes.is_a?(Hash) ? attributes : {}
     end
 
     def attributes=(attributes)
@@ -570,12 +554,26 @@ class Proxy < ApplicationRecord
     end
   end
 
+  def read_and_parse_policies_config
+    read_and_parse_policies_config!
+  rescue JSON::ParserError
+    []
+  end
+
+  def read_and_parse_policies_config!
+    attr_policies_config = read_attribute(:policies_config)
+    attr_policies_config.blank? ? [] : Array(JSON.parse(attr_policies_config))
+  end
+
   def policies_config_structure
-    policies_object = PoliciesConfig.new(policies_config)
+    parsed_config = read_and_parse_policies_config!
+    policies_object = PoliciesConfig.new(parsed_config)
     return if policies_object.valid?
     policies_object.errors.each do |attribute, message|
       errors.add(:policies_config, errors.full_message(attribute, message).downcase)
     end
+  rescue JSON::ParserError
+    errors.add(:policies_config, :invalid_format)
   end
 
   def create_default_secret_token
@@ -598,31 +596,11 @@ class Proxy < ApplicationRecord
     end
   end
 
-  def deploy
-    return true unless deployable?
-
-    if service_mesh_integration?
-      deploy_service_mesh_integration
-    elsif apicast_configuration_driven
-      deploy_v2
-    else
-      deploy_v1
-    end
-  end
-
-  def deploy_service_mesh_integration
-    return unless provider_can_use?(:service_mesh_integration)
-    deploy_v2 && deploy_production_v2
-  end
-
-  def deploy_v1
-    deployment = ProviderProxyDeploymentService.new(provider)
-
-    success = deployment.deploy(self)
-
-    analytics.track('Sandbox Proxy Deploy', success: success)
-
-    success
+  def create_proxy_config_affecting_change(*)
+    return unless persisted?
+    super
+  rescue ActiveRecord::RecordNotUnique
+    reload.send(:proxy_config_affecting_change)
   end
 
   def set_api_test_path

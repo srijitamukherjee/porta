@@ -8,14 +8,48 @@ class BackendApiDecorator < ApplicationDecorator
     h.provider_admin_backend_api_path(object)
   end
 
-  def as_json(options = {})
-    hash = super(options)
-    parse_api hash
+  def add_backend_usage_backends_data
+    {
+      id: id,
+      name: name,
+      privateEndpoint: private_endpoint,
+      updatedAt: updated_at
+    }
   end
+
+  def products_table_data
+    ServiceDecorator.decorate_collection(services.accessible.sort_by(&:name))
+                    .map(&:table_data)
+                    .to_json
+  end
+
+  def table_data
+    {
+      name: name,
+      description: private_endpoint,
+      href: link
+    }
+  end
+
+  alias link api_selector_api_link
 
   private
 
   def backend_api?
     true
+  end
+
+  def links
+    [
+      { name: 'Edit', path: h.edit_provider_admin_backend_api_path(object) },
+      { name: 'Overview', path: h.provider_admin_backend_api_path(object) },
+      { name: 'Analytics', path: h.provider_admin_backend_api_stats_usage_path(object) },
+      { name: 'Methods & Metrics', path: h.provider_admin_backend_api_metrics_path(object) },
+      { name: 'Mapping Rules', path: h.provider_admin_backend_api_mapping_rules_path(object) },
+    ]
+  end
+
+  def products_count
+    object.services.size
   end
 end

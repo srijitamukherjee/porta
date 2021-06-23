@@ -1,35 +1,25 @@
-import RegistryReducer from 'Policies/reducers/PolicyRegistry'
+// @flow
 
-const rawRegistry = {
-  cors: [{
-    $schema: 'http://apicast.io/policy-v1/schema#manifest',
-    name: 'CORS',
-    summary: 'CORS Summary',
-    description: 'CORS Description',
-    version: 'builtin',
-    configuration: {}
-  }]
-}
+import RegistryReducer from 'Policies/reducers/PolicyRegistry'
+import { initialState } from 'Policies/reducers/initialState'
+
+const registry = [{
+  $schema: 'http://apicast.io/policy-v1/schema#manifest',
+  name: 'cors',
+  humanName: 'CORS',
+  summary: 'CORS Summary',
+  description: 'CORS Description',
+  version: 'builtin',
+  configuration: {}
+}]
 
 describe('RegistryReducer', () => {
   it('should return the initial state', () => {
-    expect(RegistryReducer(undefined, {})).toEqual([])
+    expect(RegistryReducer(undefined, { type: 'FOO' })).toEqual(initialState.registry)
   })
 
   it('should return the updated state', () => {
-    const action = {
-      type: 'FETCH_REGISTRY_SUCCESS',
-      payload: rawRegistry
-    }
-    expect(RegistryReducer([], action)).toEqual([{
-      $schema: 'http://apicast.io/policy-v1/schema#manifest',
-      name: 'cors',
-      configuration: {},
-      description: 'CORS Description',
-      summary: 'CORS Summary',
-      humanName: 'CORS',
-      version: 'builtin',
-      data: {}
-    }])
+    const action = { type: 'FETCH_REGISTRY_SUCCESS', payload: registry }
+    expect(RegistryReducer([], action)).toEqual([...registry, ...[]])
   })
 })

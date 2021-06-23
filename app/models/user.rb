@@ -1,10 +1,7 @@
 require 'digest/sha1'
 
 class User < ApplicationRecord
-
-  def self.columns
-    super.reject { |c| c.name == "janrain_identifier" }
-  end
+  include Symbolize
 
   include Fields::Fields
   required_fields_are :username, :email
@@ -21,8 +18,19 @@ class User < ApplicationRecord
   include Invitations
   include Permissions
   include ProvidedAccessTokens
+  include AccountIndex::ForDependency
 
-  audited
+  self.background_deletion = [
+    :user_sessions,
+    :access_tokens,
+    [:sso_authorizations, { action: :delete }],
+    [:moderatorships, { action: :delete }],
+    [:notifications, { action: :delete }],
+    [:notification_preferences, { action: :delete, class_name: 'NotificationPreferences', has_many: false }]
+  ].freeze
+
+  audited except: %i[salt posts_count janrain_identifier cas_identifier password_digest
+                     authentication_id open_id last_login_at last_login_ip crypted_password].freeze
 
   before_validation :trim_white_space_from_username
   before_destroy :can_be_destroyed?
@@ -64,7 +72,6 @@ class User < ApplicationRecord
 
   has_many :access_tokens, foreign_key: :owner_id, dependent: :destroy, inverse_of: :owner
 
-  symbolize :role
   symbolize :signup_type
 
   validates :username, length: { :within => 3..40, :allow_blank => false }
@@ -121,7 +128,10 @@ class User < ApplicationRecord
   # after_validation :reset_lost_password_token
 
   after_save :nullify_authentication_id, if: :any_sso_authorizations?
-  after_commit :notify_deletion, on: :destroy
+  after_destroy :archive_as_deleted
+
+  alias account_for_sphinx account
+  protected :account_for_sphinx
 
   def self.search_states
     %w(pending active)
@@ -143,6 +153,8 @@ class User < ApplicationRecord
 
   def self.find_by_username_or_email(value)
     find_by(['users.username = ? OR users.email = ?', value, value])
+  rescue TypeError
+    nil
   end
 
   def self.find_with_valid_password_token(token)
@@ -150,11 +162,11 @@ class User < ApplicationRecord
   end
 
   def self.impersonation_admin!
-    where(username: ThreeScale.config.impersonation_admin['username']).first!
+    impersonation_admins.first!
   end
 
   def self.impersonation_admin
-    where(username: ThreeScale.config.impersonation_admin['username']).first
+    impersonation_admins.first
   end
 
   def impersonation_admin?
@@ -172,16 +184,18 @@ class User < ApplicationRecord
   end
 
   def accessible_services
-    account.accessible_services.permitted_for_user(self)
+    account.accessible_services.permitted_for(self)
   end
 
   def multiple_accessible_services?
-    account.multiple_accessible_services?(Service.permitted_for_user(self))
+    account.multiple_accessible_services?(Service.permitted_for(self))
   end
 
   def accessible_services?
     accessible_services.exists?
   end
+
+  delegate :accessible_backend_apis, to: :account
 
   def allowed_access_token_scopes
     AccessToken.scopes.allowed_for(self)
@@ -197,19 +211,15 @@ class User < ApplicationRecord
   end
 
   def accessible_cinstances
-    cinstances = account.provided_cinstances
+    account.provided_cinstances.permitted_for(self)
 
     # TODO: this has no clear migration path
     # once we would enable the :service_permissions feature for everyone
     # members that have no access to service would stop seeing applications
-    case
-    when has_access_to_all_services?
-        cinstances
-    when account.provider_can_use?(:service_permissions)
-        cinstances.where(service_id: member_permission_service_ids)
-    else
-        cinstances
-    end
+  end
+
+  def accessible_service_contracts
+    account.provided_service_contracts.permitted_for(self)
   end
 
   def can_login?
@@ -260,7 +270,8 @@ class User < ApplicationRecord
     sessions_to_destroy = user_sessions
     sessions_to_destroy = sessions_to_destroy.where.not(id: but.id) if but.persisted?
 
-    sessions_to_destroy.destroy_all
+    # Destroy all would try to load 25k objects to memory
+    sessions_to_destroy.delete_all
   end
 
   def signup
@@ -297,19 +308,6 @@ class User < ApplicationRecord
 
   def recently_activated?
     !minimal_signup? && super
-  end
-
-  def informal_name
-    first_name.present? ? first_name : display_name
-  end
-
-  def display_name
-    name = full_name
-    name.present? ? name : username
-  end
-
-  def full_name
-    [first_name, last_name].select(&:present?).join(' ')
   end
 
   # CMS Methods patched below - to be moved to module, or gem to be adjusted directly
@@ -412,10 +410,16 @@ class User < ApplicationRecord
     not scope.without_ids(self.id).exists?(condition)
   end
 
+  def provider_id_for_audits
+    account.try!(:provider_id_for_audits) || provider_account.try!(:provider_id_for_audits)
+  end
+
   private
 
-  def notify_deletion
-    Users::UserDeletedEvent.create_and_publish!(self)
+  def archive_as_deleted
+    return unless Features::SegmentDeletionConfig.enabled?
+    tenant_or_master = account.tenant? ? account : provider_account
+    ::DeletedObject.create!(object: self, owner: tenant_or_master)
   end
 
   def destroyable?
@@ -471,12 +475,6 @@ class User < ApplicationRecord
       sql = construct_finder_sql(options)
       self.connection.select_values(sql)
     end
-  end
-
-  protected
-
-  def provider_id_for_audits
-    account.try!(:provider_id_for_audits) || provider_account.try!(:provider_id_for_audits)
   end
 
   class SignupType

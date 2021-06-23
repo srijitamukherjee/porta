@@ -5,12 +5,12 @@ class ProxyRuleDecorator < ApplicationDecorator
 
   def pattern
     pattern_value = object.pattern
-    backend_api_path ? File.join('/', backend_api_path, pattern_value) : pattern_value
+    return pattern_value unless backend_api_path
+    File.join('/', backend_api_path, pattern_value)
   end
 
-  def metric_system_name
-    object.metric.attributes['system_name']
-  end
+  delegate :metric, to: :object
+  delegate :system_name, to: :metric, prefix: true
 
   private
 

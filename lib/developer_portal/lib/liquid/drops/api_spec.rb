@@ -8,7 +8,7 @@ module Liquid
 
       desc 'Returns the url of the API spec.'
       def url
-        cms_url_helpers.swagger_spec_path(system_name, format: :json)
+        System::UrlHelpers.cms_url_helpers.swagger_spec_path(system_name, format: :json)
       end
 
       desc 'Returns the name of the spec.'
@@ -21,6 +21,9 @@ module Liquid
         return unless (service = @spec.service)
         Drops::Service.new(service)
       end
+
+      desc 'Returns the production public base URL of the service (API product) of the spec if it has any or `nil` otherwise'
+      delegate :api_product_production_public_base_url, to: :@spec
     end
   end
 end

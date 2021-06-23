@@ -79,7 +79,7 @@ module Account::States
       end
 
       event :suspend do
-        transition all => :suspended, if: :tenant?
+        transition all => :suspended, if: :ready_to_be_suspended?
       end
 
       event :resume do
@@ -127,11 +127,25 @@ module Account::States
     end
 
     def should_be_deleted?
-      scheduled_for_deletion? || suspended? || (buyer? && provider_account.try(:should_be_deleted?))
+      suspended? || will_be_deleted?
     end
 
     def should_not_be_deleted?
       !should_be_deleted?
+    end
+
+    def will_be_deleted?
+      scheduled_for_deletion? || (buyer? && provider_account.try(:should_be_deleted?))
+    end
+
+    def ready_to_be_suspended?
+      tenant? || marked_for_suspension
+    end
+
+    attr_accessor :marked_for_suspension
+
+    def suspended_or_scheduled_for_deletion?
+      suspended? || scheduled_for_deletion?
     end
   end
 

@@ -1,8 +1,6 @@
 require 'test_helper'
 
 class Stats::ClientsTest < ActionDispatch::IntegrationTest
-  disable_transactional_fixtures!
-
   def setup
     @provider_account = FactoryBot.create(:provider_account)
     @service = @provider_account.default_service
@@ -58,6 +56,7 @@ class Stats::ClientsTest < ActionDispatch::IntegrationTest
        "state"=>@cinstance.state,
        "service"=>{"id"=>@cinstance.service_id}},
      "values"=> [0] * 21 + [2] + [0] * 7 + [1, 0],
+     "previous_total" => 1,
      "change"=>200.0,
      "metric"=>{"name"=>@metric.friendly_name, "id"=>@metric.id, "unit"=>@metric.unit, "system_name"=>@metric.system_name}
   end
@@ -120,11 +119,5 @@ class Stats::ClientsTest < ActionDispatch::IntegrationTest
        "state"=>@cinstance.state,
        "service"=>{"id"=>@cinstance.service_id}},
      "values"=> [0] * 29 + [1, 0]
-
-
-
-
   end
-
-
 end

@@ -1,6 +1,17 @@
 # frozen_string_literal: true
 
 module VerticalNavHelper
+  include PlansHelper
+
+  def vertical_nav_data
+    {
+      'current-api': current_api.to_json(root: false, only: %i[name]),
+      sections: vertical_nav_sections.to_json,
+      'active-section': active_submenu,
+      'active-item': active_sidebar
+    }.compact
+  end
+
   def vertical_nav_sections
     case active_menu
     when :personal, :account
@@ -81,8 +92,8 @@ module VerticalNavHelper
   def audience_accounts_items
     items = []
     items << {id: :listing,       title: 'Listing',       path: admin_buyers_accounts_path}           if can?(:manage, :partners)
-    items << {id: :account_plans,  title: 'Account Plans', path: admin_buyers_account_plans_path}      if can?(:manage, :plans) && current_account.settings.account_plans.allowed? && current_account.settings.account_plans_ui_visible?
-    items << {id: :subscriptions, title: 'Subscriptions', path: admin_buyers_service_contracts_path}  if can?(:manage, :service_contracts) && current_account.settings.service_plans.allowed? && current_account.settings.service_plans_ui_visible?
+    items << {id: :account_plans,  title: 'Account Plans', path: admin_buyers_account_plans_path}     if account_plans_management_visible?
+    items << {id: :subscriptions, title: 'Subscriptions', path: admin_buyers_service_contracts_path}  if service_plans_management_visible?
 
     if can?(:manage, :settings)
       items << {                          title: 'Settings'}
@@ -106,7 +117,7 @@ module VerticalNavHelper
     if can?(:manage, :finance)
       items << {id: :earnings,  title: 'Earnings by Month',  path: admin_finance_root_path}
       items << {id: :invoices,  title: 'Invoices',           path: admin_finance_invoices_path}
-      items << {id: :finance,   title: 'Finance Log',        path: admin_finance_log_entries_path} if current_user.username == ThreeScale.config.impersonation_admin['username']
+      items << {id: :finance,   title: 'Finance Log',        path: admin_finance_log_entries_path} if current_user.impersonation_admin?
     end
 
     if can?(:manage, :settings)
@@ -134,7 +145,7 @@ module VerticalNavHelper
     end
 
     items << {title: ' '} # Blank space
-    items << {title: 'Visit Portal', path: access_code_url(host: current_account.domain, cms_token: current_account.settings.cms_token!, access_code: current_account.site_access_code).html_safe, target: '_blank'}
+    items << {title: 'Visit Portal', path: access_code_url(host: current_account.external_domain, cms_token: current_account.settings.cms_token!, access_code: current_account.site_access_code).html_safe, target: '_blank'}
 
     if can?(:manage, :portal)
       items << {                                   title: 'Legal Terms'}
@@ -193,9 +204,8 @@ module VerticalNavHelper
     return sections unless @service
     sections << {id: :overview,      title: 'Overview',      path: admin_service_path(@service)} if can? :manage, :plans
     sections << {id: :monitoring,    title: 'Analytics',     items: service_analytics}           if can? :manage, :monitoring
-    sections << {id: :applications,  title: 'Applications',  items: service_applications}        if can? :manage, :applications
+    sections << {id: :applications,  title: 'Applications',  items: service_applications}        if (can? :manage, :plans) || (can? :manage, :applications)
     sections << {id: :subscriptions, title: 'Subscriptions', items: service_subscriptions}       if can?(:manage, :service_plans) && current_account.settings.service_plans_ui_visible?
-    sections << {id: :end_users,     title: 'End-users',     items: service_end_users}           if can?(:manage, :end_users) && current_account.settings.end_user_plans_ui_visible? && !master_on_premises?
 
     if can? :manage, :plans
       sections << {id: :ActiveDocs,  title: 'ActiveDocs',  path: admin_service_api_docs_path(@service)}
@@ -207,7 +217,7 @@ module VerticalNavHelper
 
   def service_analytics
     items = []
-    items << {id: :usage,              title: 'Usage',              path: admin_service_stats_usage_path(@service)}
+    items << {id: :usage,              title: 'Traffic',            path: admin_service_stats_usage_path(@service)}
     items << {id: :daily_averages,     title: 'Daily Averages',     path:   admin_service_stats_days_path(@service)}
     items << {id: :hourly,             title: 'Hourly Averages',    path: admin_service_stats_hours_path(@service)}
     items << {id: :top_applications,   title: 'Top Applications',   path: admin_service_stats_top_applications_path(@service)}
@@ -219,9 +229,9 @@ module VerticalNavHelper
 
   def service_applications
     items = []
-    items << {id: :listing,           title: 'Listing',           path: admin_service_applications_path(@service)}
+    items << {id: :listing,           title: 'Listing',           path: admin_service_applications_path(@service)}      if can? :manage, :applications
     items << {id: :application_plans, title: 'Application Plans', path: admin_service_application_plans_path(@service)} if can?(:manage, :plans)
-    if current_account.provider_can_use?(:api_as_product)
+    unless master_on_premises?
       items << {title: 'Settings'}
       items << {id: :usage_rules, title: 'Usage Rules', path: usage_rules_admin_service_path(@service)}
     end
@@ -234,21 +244,13 @@ module VerticalNavHelper
     items << {id: :service_plans, title: 'Service Plans',         path: admin_service_service_plans_path(@service)}
   end
 
-  def service_end_users
-    items = []
-    items << {id: :search,         title: 'Search',         path: admin_service_end_users_path(@service)}
-    items << {id: :end_user_plans, title: 'End-user Plans', path: admin_service_end_user_plans_path(@service)}
-  end
-
   def service_integration_items
     items = []
-    items << {id: :configuration,       title: 'Configuration',     path: path_to_service(@service),    outOfDateConfig: has_out_of_date_configuration?(@service)}
+    items << {id: :configuration,       title: 'Configuration',     path: admin_service_integration_path(@service), itemOutOfDateConfig: has_out_of_date_configuration?(@service)}
     items << {id: :methods_metrics,     title: 'Methods & Metrics', path: admin_service_metrics_path(@service)}
-    items << {id: :mapping_rules,       title: 'Mapping Rules',     path: admin_service_proxy_rules_path(@service)} if current_account.independent_mapping_rules_enabled?
-    if current_account.provider_can_use?(:api_as_product)
-      items << {id: :policies,            title: 'Policies',          path: edit_admin_service_policies_path(@service)} if @service.can_use_policies?
-      items << {id: :backend_api_configs, title: 'Backends',        path: admin_service_backend_api_configs_path(@service)} if @service.can_use_backends?
-    end
+    items << {id: :mapping_rules,       title: 'Mapping Rules',     path: admin_service_proxy_rules_path(@service)}
+    items << {id: :policies,            title: 'Policies',          path: edit_admin_service_policies_path(@service)} if @service.can_use_policies?
+    items << {id: :backend_api_configs, title: 'Backends',        path: admin_service_backend_usages_path(@service)} if @service.can_use_backends?
     items << {id: :settings,            title: 'Settings',        path: settings_admin_service_path(@service)}
   end
 
@@ -257,6 +259,7 @@ module VerticalNavHelper
     sections = []
     return sections unless @backend_api
     sections << {id: :overview,         title: 'Overview',           path: provider_admin_backend_api_path(@backend_api)}
+    sections << {id: :monitoring,       title: 'Analytics',          path: provider_admin_backend_api_stats_usage_path(@backend_api)} if can? :manage, :monitoring
     sections << {id: :methods_metrics,  title: 'Methods & Metrics',  path: provider_admin_backend_api_metrics_path(@backend_api)}
     sections << {id: :mapping_rules,    title: 'Mapping Rules',      path: provider_admin_backend_api_mapping_rules_path(@backend_api)}
   end

@@ -1,4 +1,8 @@
+# frozen_string_literal: true
+
 class DeveloperPortal::Admin::Account::PasswordsController < ::DeveloperPortal::BaseController
+  include ThreeScale::SpamProtection::Integration::Controller
+
   liquify prefix: 'password'
 
   skip_before_action :login_required
@@ -6,14 +10,14 @@ class DeveloperPortal::Admin::Account::PasswordsController < ::DeveloperPortal::
   before_action :find_user, :only => [:show, :update]
 
   def create
-    if user = @provider.buyer_users.find_by_email(params[:email])
-      user.generate_lost_password_token!
-      flash[:notice] = "A password reset link has been emailed to you."
-      redirect_to login_url
-    else
-      flash[:error] = 'Email not found.'
-      redirect_to new_admin_account_password_url(:request_password_reset => true) # keep hash for retrocompatibility
-    end
+    return redirect_to_request_password('Spam protection failed.') unless spam_check(buyer)
+
+    user = @provider.buyer_users.find_by_email(params[:email])
+    return redirect_to_request_password('Email not found.') unless user
+
+    user.generate_lost_password_token!
+    flash[:notice] = 'A password reset link has been emailed to you.'
+    redirect_to login_url
   end
 
   def new; end
@@ -36,6 +40,15 @@ class DeveloperPortal::Admin::Account::PasswordsController < ::DeveloperPortal::
 
   private
 
+  def redirect_to_request_password(error_message)
+    flash[:error] = error_message
+    redirect_to new_admin_account_password_url(request_password_reset: true)
+  end
+
+  def buyer
+    @buyer ||= @provider.buyers.build
+  end
+
   def password_params
     params.require(:user).permit(:password, :password_confirmation)
   end
@@ -54,7 +67,7 @@ class DeveloperPortal::Admin::Account::PasswordsController < ::DeveloperPortal::
     @provider = site_account
 
     unless @provider.provider?
-      render_error "Wrong domain '#{request.host}' for path '#{request.path}'"
+      render_error "Wrong domain '#{request.internal_host}' for path '#{request.path}'"
       false
     end
   end

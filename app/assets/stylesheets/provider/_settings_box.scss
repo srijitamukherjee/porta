@@ -1,6 +1,12 @@
-.SettingsBox,
-.IntegrationSettingsBox {
+.SettingsBox {
   @include white-box-shadow;
+}
+
+#integration-tabs .integration .SettingsBox {
+  box-shadow: none;
+}
+
+.SettingsBox {
   position: relative;
 
   &-toggle {
@@ -41,7 +47,10 @@
   }
 
   & + .integration {
+    @include white-box-shadow;
     margin-top: line-height-times(1);
+    overflow: hidden;
+    padding: line-height-times(1);
   }
 
   &-section + &-section {
@@ -78,33 +87,30 @@
     top: 100%;
     z-index: 0;
   }
-
-  &--is-successful::after {
-    border-left-color: $success-color;
-  }
-
-  &--is-erroneous::after {
-    border-left-color: $error-color;
-  }
-
   &-summary {
-    @include white-box-shadow;
-    border: $border-width-lg solid transparent;
+    border: $border-width-lg solid $border-color;
     min-height: line-height-times(2);
     padding: line-height-times(1);
     position: relative;
   }
 
+  &-backend-summary {
+    border-left: line-height-times(1/4) solid $border-color;
+    margin: line-height-times(1) 0 line-height-times(2);
+    padding-left: line-height-times(1);
+    dt.u-dl-term {
+      width: calc(40% - #{line-height-times(3/4)});
+    }
+    dd.u-dl-definition {
+      padding-left: calc(40% - #{line-height-times(3/4)});
+    }
+  }
+
+  &-promote-button {
+    border-top: $border-width solid $border-color;
+  }
+
   &-title {
     margin: 0 !important;
-  }
-
-  &--is-successful {
-    border-color: $success-color;
-  }
-
-  &--is-erroneous {
-    @include white-box-shadow;
-    border-color: $error-color;
   }
 }

@@ -27,6 +27,7 @@ class ApiDocs::Service < ApplicationRecord
   scope :published, -> { where(published: true) }
   scope :accessible, -> { joining { service.outer }.where.has { (service_id == nil) | (service.state != ::Service::DELETE_STATE) } }
   scope :without_service, -> { where(service_id: nil) }
+  scope :permitted_for, ->(user = nil) { user ? where.has { (service_id == nil) | service_id.in(user.accessible_services.select(:id)) } : self }
 
   before_save :set_default_values
   before_save :prepare_base_path_notify
@@ -49,7 +50,7 @@ class ApiDocs::Service < ApplicationRecord
   def self.for(account)
     services = account.api_docs_services.published
 
-    { :host => account.domain,
+    { :host => account.external_domain,
       :apis => services.map { |service| ApiDocs::Service.spec_for(service)} }
   end
 
@@ -99,6 +100,11 @@ class ApiDocs::Service < ApplicationRecord
   # This is the body JSON parsed
   def specification
     @_spec ||= ThreeScale::Swagger::Specification.new(self.body)
+  end
+
+  def api_product_production_public_base_url
+    return unless service&.proxy
+    service.proxy.endpoint
   end
 
   private

@@ -1,55 +1,55 @@
 // @flow
 
-import React, {useState} from 'react'
+import * as React from 'react'
 
 import {ServiceSourceForm, ServiceDiscoveryForm, ServiceManualForm} from 'NewService'
-import {createReactWrapper} from 'utilities/createReactWrapper'
+import {createReactWrapper} from 'utilities'
 import type {Api} from 'Types/Api'
+import type {ServiceFormTemplate} from 'NewService/types'
 
 type Props = {
+  template: ServiceFormTemplate,
   isServiceDiscoveryAccessible: boolean,
   isServiceDiscoveryUsable: boolean,
   serviceDiscoveryAuthenticateUrl: string,
   providerAdminServiceDiscoveryServicesPath: string,
   adminServicesPath: string,
-  apiap: boolean,
   backendApis: Api[]
 }
 
-const NewServiceForm = (props: Props) => {
-  const {isServiceDiscoveryAccessible, isServiceDiscoveryUsable, serviceDiscoveryAuthenticateUrl,
-    providerAdminServiceDiscoveryServicesPath, adminServicesPath, apiap, backendApis} = props
+const NewServiceForm = (props: Props): React.Node => {
+  const {template, isServiceDiscoveryAccessible, isServiceDiscoveryUsable, serviceDiscoveryAuthenticateUrl,
+    providerAdminServiceDiscoveryServicesPath, adminServicesPath, backendApis} = props
 
-  const [formMode, setFormMode] = useState('manual')
-  const [loadingProjects, setLoadingProjects] = useState(false)
+  const [formMode, setFormMode] = React.useState('manual')
+  const [loadingProjects, setLoadingProjects] = React.useState(false)
 
   const handleFormsVisibility = (event: SyntheticEvent<HTMLInputElement>) =>
     setFormMode(event.currentTarget.value)
 
   const formToRender = () => formMode === 'manual'
-    ? <ServiceManualForm formActionPath={adminServicesPath} apiap={apiap} backendApis={backendApis} />
-    : <ServiceDiscoveryForm formActionPath={providerAdminServiceDiscoveryServicesPath} apiap={apiap} setLoadingProjects={setLoadingProjects} />
-
-  const title = apiap ? 'New Product' : 'New API'
+    ? <ServiceManualForm template={template} formActionPath={adminServicesPath} backendApis={backendApis} />
+    : <ServiceDiscoveryForm formActionPath={providerAdminServiceDiscoveryServicesPath} setLoadingProjects={setLoadingProjects} />
 
   return (
     <React.Fragment>
-      <h1>{title}</h1>
-      {isServiceDiscoveryAccessible &&
-        <ServiceSourceForm
-          isServiceDiscoveryUsable={isServiceDiscoveryUsable}
-          serviceDiscoveryAuthenticateUrl={serviceDiscoveryAuthenticateUrl}
-          handleFormsVisibility={handleFormsVisibility}
-          loadingProjects={loadingProjects}
-          apiap={apiap}
-        />
-      }
-      {formToRender()}
+      <h1>New Product</h1>
+      <div className="new-service-form">
+        {isServiceDiscoveryAccessible &&
+          <ServiceSourceForm
+            isServiceDiscoveryUsable={isServiceDiscoveryUsable}
+            serviceDiscoveryAuthenticateUrl={serviceDiscoveryAuthenticateUrl}
+            handleFormsVisibility={handleFormsVisibility}
+            loadingProjects={loadingProjects}
+          />
+        }
+        {formToRender()}
+      </div>
     </React.Fragment>
   )
 }
 
-const NewServiceFormWrapper = (props: Props, containerId: string) =>
+const NewServiceFormWrapper = (props: Props, containerId: string): void =>
   createReactWrapper(<NewServiceForm {...props} />, containerId)
 
 export {NewServiceForm, NewServiceFormWrapper}

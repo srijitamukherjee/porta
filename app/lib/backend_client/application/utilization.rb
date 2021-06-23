@@ -3,7 +3,7 @@ module BackendClient
     module Utilization
 
       def utilization(metrics_list)
-        utilization_records = ThreeScale::Core::Utilization.load(service_id, id)
+        utilization_records = ThreeScale::Core::Utilization.load(service_id, id) || []
         process_utilization(utilization_records, metrics_list)
       rescue
         System::ErrorReporting.report_error($!)
@@ -31,9 +31,11 @@ module BackendClient
 
         # Cannot call #map! on a ThreeScale::Core::APIClient::Collection instance
         records = records.map do |record|
-          attributes = record.attributes.merge(metric: metrics_by_name[record.metric_name])
+          metric = metrics_by_name[record.metric_name]
+          next unless metric
+          attributes = record.attributes.merge(metric: metric)
           UtilizationRecord.new attributes
-        end
+        end.compact
 
         finite, infinite = records.partition(&:finite?)
         finite.sort_by!(&:percentage).reverse!

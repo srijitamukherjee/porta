@@ -1,7 +1,7 @@
 class Provider::SignupsController < Provider::BaseController
   include ThreeScale::SpamProtection::Integration::Controller
 
-  skip_before_action :set_x_frame_options_header
+  before_action :disable_x_frame
   before_action :ensure_signup_possible
 
   skip_before_action :login_required
@@ -26,31 +26,18 @@ class Provider::SignupsController < Provider::BaseController
   end
 
   def create
-    account_params = (params[:account] || {}) .dup
-    user_params    = account_params.try!(:delete, :user)
     @plan = plan
+    provider_account_manager = Signup::ProviderAccountManager.new(master)
+    signup_result = provider_account_manager.create(signup_params, &method(:build_signup_result_custom_fields))
+    @fields = Fields::SignupForm.new(@provider, @user, params[:fields])
 
-    signup = master.signup_provider(plan, signup_options) do |provider, user|
-      @provider, @user = provider, user
-
-      @fields = Fields::SignupForm.new(@provider, @user, params[:fields])
-
-      provider.attributes = account_params
-      provider.subdomain  = account_params[:subdomain]
-
-      user.attributes = user_params
-
-      user.signup_type = :new_signup
-
-      break unless spam_check(provider)
-    end
-
-    return render :show unless signup
+    return render :show unless signup_result.persisted?
 
     session[:success_data] = { first_name: @user.first_name, email: @user.email }
 
     tracking = ThreeScale::Analytics.user_tracking(@user)
     traits = tracking.identify(analytics_session.traits)
+    tracking.track('Signup', signup_options)
     analytics_session.delayed.identify(@user.id, traits)
 
     if request.xhr?
@@ -61,6 +48,18 @@ class Provider::SignupsController < Provider::BaseController
   end
 
   protected
+
+  def signup_params
+    Signup::SignupParams.new(plans: [plan], user_attributes: user_params, account_attributes: account_params, validate_fields: true)
+  end
+
+  def account_params
+    params.require(:account).except(:user).merge(sample_data: true)
+  end
+
+  def user_params
+    params.require(:account).fetch(:user, {}).merge(signup_type: :new_signup, username: :admin)
+  end
 
   def handle_cache_response
     expires_in 1.hour, public: true
@@ -84,10 +83,19 @@ class Provider::SignupsController < Provider::BaseController
   end
 
   def ensure_signup_possible
-    unless master.signup_provider_possible?
-      System::ErrorReporting.report_error("Provider signup not enabled. Check all master's plans are in place.")
-      render_error 'Provider signup not enabled.', :status => :not_found
-    end
+    return if master.signup_provider_possible?
+
+    System::ErrorReporting.report_error('Provider signup not enabled. Check all master\'s plans are in place.')
+    render_error 'Provider signup not enabled.', status: :not_found
+  end
+
+  def build_signup_result_custom_fields(result)
+    @provider = result.account
+    @user = result.user
+    @provider.signup_mode!
+    @provider.subdomain = account_params[:subdomain]
+    @provider.self_subdomain = account_params[:self_subdomain]
+    result.add_error(message: 'spam check failed') unless spam_check(@provider)
   end
 
   def plan

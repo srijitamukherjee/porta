@@ -3,7 +3,7 @@
 Ability.define do |user|
   if user && user.admin? && user.account.master?
     can [:read, :show, :edit, :update, :create, :destroy], Cinstance
-    
+
     can :manage, :logo
 
     can %i[read delete configure], Account
@@ -22,18 +22,20 @@ Ability.define do |user|
     can :manage, user.account
     can(:create, Account, &:signup_provider_possible?)
 
+    can :manage, :plans
+    can :manage, Service
+
     if ThreeScale.config.onpremises
       cannot :manage, :multiple_services
       cannot :manage, :service_plans
       cannot :manage, :provider_plans
       cannot %i[see read admin manage], :account_plans
-      cannot %i[create manage], :plans
-      can :admin, :plans
+      cannot :create, :plans
+      cannot %i[create destroy], Service
     else
       can :manage, :multiple_services
       can :manage, :provider_plans
       can :read, :account_plans
-      can :manage, :plans
       can :manage, :service_contracts
     end
     can :manage, :partners
@@ -48,17 +50,21 @@ Ability.define do |user|
     can :manage, :authentication_providers
     can :manage, :web_hooks
 
+    can %i[index show edit update create destroy], BackendApi
+
+    can :manage, BackendApiConfig
+
     #COPY these come from forum.rb
     can :manage, TopicCategory do |category|
       category.forum.account = user.account
     end
 
-    can :update, Service, :account_id => user.account_id
-    can :create, Service
     can :manage, :multiple_users
     can :manage, User
     can :manage, Invitation
     can :manage, Invoice, provider_account_id: user.account_id unless user.account.master_on_premises?
+
+    can :manage, :permissions
 
     user.account.settings.switches.each do |name, _switch|
       can :admin, name

@@ -2,9 +2,6 @@
 
 = javascript_include_tag 'vendor/jquery/extensions/jquery.cookie.js'
 
-- content_for :javascripts do
-  = javascript_pack_tag 'bubbles'
-
 section.Section.u-toggleableBySettingsBox data-state="open"
   h2 Methods
   p
@@ -29,7 +26,7 @@ section.Section.u-toggleableBySettingsBox data-state="open"
 
     tbody
       - if @backend_api.method_metrics.any?
-        - @backend_api.method_metrics.each do |method|
+        - @backend_api.method_metrics.includes(:proxy_rules, :parent).each do |method|
           tr
             td
               = link_to method.friendly_name,
@@ -42,9 +39,6 @@ section.Section.u-toggleableBySettingsBox data-state="open"
             td.actions
 
         javascript:
-          document.addEventListener('DOMContentLoaded', function () {
-            showBubble(#{json bubbles.take(1).as_json})
-          })
           $(document).on('click', 'a[data-behavior~=open-mapping-rules]', function(event){
             // Unfold the mapping section of the integration page by
             // setting the cookie value that controls it
@@ -79,7 +73,7 @@ section.Section.u-toggleableBySettingsBox data-state="open"
 
     tbody
       - if @backend_api.top_level_metrics.any?
-        - @backend_api.top_level_metrics.each do |metric|
+        - @backend_api.top_level_metrics.includes(:proxy_rules).each do |metric|
           tr
             td
               = link_to metric.friendly_name, edit_provider_admin_backend_api_metric_path(@backend_api, metric)

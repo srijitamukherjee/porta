@@ -1,12 +1,7 @@
 def import_simple_layout(provider)
   simple_layout = SimpleLayout.new(provider)
-
-  if $percy
-    simple_layout.import!
-  else
-    simple_layout.import_pages!
-    simple_layout.import_js_and_css! if @javascript
-  end
+  simple_layout.import_pages!
+  simple_layout.import_js_and_css! if @javascript
 end
 
 Given(/^a provider "([^"]*)" signed up to (plan "[^"]*")$/) do |name, plan|
@@ -120,12 +115,12 @@ Given('the provider has sample data') do
 end
 
 Given('a provider exists') do
-  step 'a provider "foo.example.com"'
+  step 'a provider "foo.3scale.localhost"'
   @service ||= @provider.default_service
 end
 
 Given('Provider has setup RH SSO') do
-  step 'a provider "foo.example.com"'
+  step 'a provider "foo.3scale.localhost"'
   steps <<-GHERKIN
   And the provider account allows signups
   And the provider has the authentication provider "Keycloak" published
@@ -148,12 +143,12 @@ Given('stub integration errors dashboard') do
 end
 
 Given(/^a provider( is logged in)?$/) do |login|
-  step 'a provider "foo.example.com"'
-  step 'current domain is the admin domain of provider "foo.example.com"'
+  step 'a provider "foo.3scale.localhost"'
+  step 'current domain is the admin domain of provider "foo.3scale.localhost"'
   step 'stub integration errors dashboard'
-  step 'I log in as provider "foo.example.com"' if login
+  step 'I log in as provider "foo.3scale.localhost"' if login
 
-  @provider = Account.find_by_domain!('foo.example.com')
+  @provider = Account.find_by_domain!('foo.3scale.localhost')
 end
 
 Given(/^master admin( is logged in)?/) do |login|
@@ -295,8 +290,4 @@ Then(/^new tenant should be not created$/) do
   @expected_flash_errors.each do |error_message|
     assert_selector('.inline-errors', :text => error_message[:message])
   end
-end
-
-Given /^the account has api_as_product rolling update enabled$/ do
-  @provider.stubs(:provider_can_use?).with(:api_as_product).returns(true)
 end

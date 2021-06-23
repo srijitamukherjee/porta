@@ -14,6 +14,7 @@
 .deploy_info
 .ruby-gemset
 .ruby-version
+.tool-versions
 .pt
 .pivotalrc
 .pivotal_cache
@@ -47,10 +48,11 @@ C:\\nppdf32Log\\debuglog.txt
 /coverage/
 
 /config/amazon_s3.yml
-/config/backend.yml
 /config/application.yml
-/config/database.yml
+/config/backend.yml
 /config/backend_redis.yml
+/config/database.yml
+/config/domain_substitution.yml
 /config/redis.yml
 /config/oauth2.yml
 /config/slave_redis.yml
@@ -67,12 +69,12 @@ C:\\nppdf32Log\\debuglog.txt
 /config/settings.yml
 /config/sandbox_proxy.yml
 /config/cache_store.yml
-/config/google_experiments.yml
 /config/features.yml
 /config/web_analytics.yml
 /config/web_hooks.yml
 /config/rolling_updates.yml
 /config/paperclip.yml
+/config/currencies.yml
 /config/plan_rules.yml
 /config/service_discovery.yml
 /config/smtp.yml
@@ -137,3 +139,12 @@ Gemfile.local
 
 # Typings
 flow-typed
+config/cable.yml
+
+# Yarn
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.pnp.*
+package-lock.json
+*.orig

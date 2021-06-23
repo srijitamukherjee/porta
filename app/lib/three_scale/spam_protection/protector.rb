@@ -18,12 +18,11 @@ module ThreeScale::SpamProtection
       probability.to_f / enabled.count
     end
 
-    def is_spam?
+    def spam?
       probability = spam_probability
       Rails.logger.info { "[SpamProtection] probability is #{probability} and allowed level is #{spam_level}" }
       probability >= spam_level
     end
-    alias spam? is_spam?
 
     def spam_level
       config[:level]
@@ -32,16 +31,18 @@ module ThreeScale::SpamProtection
     class FormProtector
       include Recaptcha::ClientHelper
 
-      attr_reader :form, :protector
+      attr_reader :form, :protector, :session_store
 
       delegate :template, to: :form
       delegate :logged_in?, to: :template, allow_nil: true
-      delegate :is_spam?, :checks, to: :protector
+      delegate :checks, to: :protector
       delegate :captcha_configured?, to: Recaptcha
+      delegate :marked_as_possible_spam?, to: :session_store
 
       def initialize(form, protector)
         @form = form
         @protector = protector
+        @session_store = SessionStore.new(request_session)
       end
 
       def http_method
@@ -61,11 +62,11 @@ module ThreeScale::SpamProtection
       end
 
       def captcha_needed?
-        captcha_required? || (!http_method.get? && is_spam?)
+        captcha_required? || possible_spam?
       end
 
       def enabled?
-        not logged_in? and level != :none
+        !logged_in? && level != :none
       end
 
       def to_str
@@ -90,6 +91,24 @@ module ThreeScale::SpamProtection
       end
 
       alias to_s to_str
+
+      private
+
+      def request_session
+        return {} if template&.controller.blank?
+
+        template.controller.request.session
+      end
+
+      def possible_spam?
+        http_method.get? ? marked_as_possible_spam? : mark_possible_spam
+      end
+
+      def mark_possible_spam
+        return false unless protector.spam?
+
+        session_store.mark_possible_spam
+      end
     end
 
     def form(form)

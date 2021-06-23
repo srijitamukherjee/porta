@@ -49,7 +49,7 @@ Returns the id of the account.
 Returns the organization name of the developer's account.
 
 ### display_name
-Returns account's display name
+Returns the organization name of the developer's account.
 
 ### vat_zero_text
 Returns a text about a VAT zero.
@@ -173,8 +173,6 @@ Give access to permission methods.
 ### edit_braintree_blue_credit_card_details_url
 
 ### edit_stripe_billing_address_url
-
-### edit_adyen12_billing_address_url
 
 -----------
 
@@ -364,6 +362,9 @@ Returns the name of the spec.
 
 ### service
 Returns the service of the spec if it has any or `nil` otherwise.
+
+### api_product_production_public_base_url
+Returns the production public base URL of the service (API product) of the spec if it has any or `nil` otherwise
 
 -----------
 
@@ -701,19 +702,6 @@ OAuth callback url.
 
 
 ## Methods
-### login_url
-
-### user_identified?
-
------------
-
-# Base drop
-
-
-
-
-
-## Methods
 ### errors
 
 If a form for this model is rendered after unsuccessful submission,
@@ -736,6 +724,19 @@ Returns the resource URL of the result.
 
 ### description
 Returns a descriptive string for the result.
+
+-----------
+
+# Base drop
+
+
+
+
+
+## Methods
+### login_url
+
+### user_identified?
 
 -----------
 
@@ -1565,6 +1566,12 @@ Returns the resource URL of the invoice PDF.
 {{ "PDF" | link_to: invoice.pdf_url }}
 ```
 
+### pay_now?
+Returns true if the online payment page is available for the invoice.
+```liquid
+{% if invoice.pay_now? %}
+```
+
 -----------
 
 # LineItem drop
@@ -1770,12 +1777,18 @@ this returns the errors that occurred.
 ```
 
 ### title
+Returns the title of the page.
+```liquid
+<title>{{ page.title }}</title>
+```
 
-### kind
-
-### url
-
-### description
+### system_name
+Returns system name of the page.
+```liquid
+{% if page.system_name == 'my_page' %}
+  {% include 'custom_header' %}
+{% endif %}
+```
 
 -----------
 
@@ -1798,18 +1811,12 @@ this returns the errors that occurred.
 ```
 
 ### title
-Returns the title of the page.
-```liquid
-<title>{{ page.title }}</title>
-```
 
-### system_name
-Returns system name of the page.
-```liquid
-{% if page.system_name == 'my_page' %}
-  {% include 'custom_header' %}
-{% endif %}
-```
+### kind
+
+### url
+
+### description
 
 -----------
 
@@ -2267,12 +2274,6 @@ Returns the telephone number of the account.
 {% endif %}
 ```
 
-### logo_url
-Returns the logo URL.
-```liquid
-<img src="{{ provider.logo_url }}"/>
-```
-
 ### multiple_services_allowed?
 *True* if your 3scale plan allows you to manage multiple APIs
                as separate [services][support-terminology-service].
@@ -2341,6 +2342,12 @@ You can enable or disable signups in the [usage rules section][usage-rules] of y
 
 ### account_management_enabled?
 You can enable or disable account management in the [usage rules section][usage-rules].
+
+### logo_url
+Returns the logo URL.
+```liquid
+<img src="{{ provider.logo_url }}"/>
+```
 
 ### api_specs
 Returns API spec collection.
@@ -2881,12 +2888,9 @@ this returns the errors that occurred.
 ```
 
 ### title
-
-### kind
+Name of the topic. Submitted when first post to the thread is posted.
 
 ### url
-
-### description
 
 -----------
 
@@ -2909,9 +2913,12 @@ this returns the errors that occurred.
 ```
 
 ### title
-Name of the topic. Submitted when first post to the thread is posted.
+
+### kind
 
 ### url
+
+### description
 
 -----------
 

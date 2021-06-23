@@ -11,13 +11,15 @@ module CinstanceRepresenter
 
   property :state
   property :enabled?, as: :enabled
-  property :end_user_required
 
   property :created_at
   property :updated_at
   property :service_id
+  property :service_name
   property :plan_id
+  property :plan_name
   property :user_account_id, as: :account_id
+  property :org_name
   property :first_traffic_at, render_nil: true
   property :first_daily_traffic_at, render_nil: true
 
@@ -78,5 +80,8 @@ module CinstanceRepresenter
   end
 
   delegate :id, to: :service, prefix: true
+  delegate :name, to: :service, prefix: true
+  delegate :org_name, to: :user_account
+  delegate :name, to: :plan, prefix: true
   delegate :oidc_configuration, to: :service
 end

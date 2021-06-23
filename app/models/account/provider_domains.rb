@@ -4,6 +4,7 @@ module Account::ProviderDomains
   extend ActiveSupport::Concern
 
   included do
+    include ThreeScale::DomainSubstitution::Account
 
     with_options :if => :validate_domains? do |provider|
       provider.validate :domain_uniqueness, :self_domain_uniqueness, :domain_not_self_domain
@@ -89,6 +90,10 @@ module Account::ProviderDomains
     return if domains_present?
     return if org_name.blank? && subdomain.blank?
 
+    generate_domains!
+  end
+
+  def generate_domains!
     domains_builder_params = { current_subdomain: subdomain.presence, org_name: org_name, invalid_subdomain_condition: method(:subdomain_exists?) }
     domains_builder = master? ? Signup::MasterDomainsBuilder.new(**domains_builder_params) : Signup::DomainsBuilder.new(**domains_builder_params)
     assign_domains(domains_builder.generate)
@@ -153,7 +158,6 @@ module Account::ProviderDomains
 
     !scope.exists?
   end
-
   private
 
   def validate_domains?

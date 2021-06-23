@@ -1,11 +1,14 @@
-module Provider::Admin::DashboardsHelper
+# frozen_string_literal: true
 
+module Provider::Admin::DashboardsHelper
+  include PlansHelper
   include ApplicationHelper
 
   # @param name [Symbol]
   # @param params [Hash]
-  def dashboard_widget(name, params = {})
-    widget = DashboardWidgetPresenter.new(name, params)
+  # @param variables [Hash]
+  def dashboard_widget(name, params = {}, variables = {})
+    widget = DashboardWidgetPresenter.new(name, params, variables)
     widget.render
   end
 
@@ -46,20 +49,6 @@ module Provider::Admin::DashboardsHelper
     safe_wrap_with_parenthesis(dashboard_collection_link(singular_name, collection, path, options))
   end
 
-  def dashboard_apiap_tab_label(html_for, singular_name, collection, options = {})
-    label_text = pluralize(number_to_human(collection.size), singular_name, options.fetch(:plural, nil))
-    icon_name = options[:icon_name]
-    label_class = css_class(
-      'DashboardNavigation-link': true,
-      'current-tab': options.fetch(:current_tab, false)
-    )
-    label_tag html_for, class: label_class do
-      concat icon(icon_name) if icon_name
-      concat ' '
-      concat label_text
-    end
-  end
-
   def safe_wrap_with_parenthesis(html)
     " (#{h html})".html_safe
   end
@@ -77,14 +66,10 @@ module Provider::Admin::DashboardsHelper
   end
 
   def show_subscriptions_on_dashboard?(service)
-    can?(:manage, :service_contracts) && current_account.settings.service_plans.allowed? && current_account.settings.service_plans_ui_visible? && current_account.service_plans.not_custom.size > 1
+    service_plans_management_visible? && current_account.service_plans.not_custom.size > 1
   end
 
   def show_service_plans_on_dashboard?(service)
     can?(:manage, :service_plans) && service.service_plans.not_custom.size > 1
-  end
-
-  def show_end_users_on_dashboard?(service)
-    can?(:manage, :end_users) && service.end_users_allowed? && current_account.settings.end_user_plans_ui_visible?
   end
 end

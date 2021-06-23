@@ -2,7 +2,6 @@ class SSOToken
   include ActiveModel::Validations
   include ActiveModel::MassAssignmentSecurity
   include ActiveModel::Serializers::Xml
-  include Rails.application.routes.url_helpers
 
   attr_accessor   :user_id, :username, :expires_in, :redirect_url, :protocol, :account
   attr_accessible :user_id, :username, :expires_in, :redirect_url, :protocol
@@ -64,13 +63,13 @@ class SSOToken
     save if new_record?
 
     params= {
-      host: host || account.domain,
+      host: host || account.external_domain,
       protocol: protocol,
       token: encrypted_token,
       expires_at: expires_at.to_i,
       redirect_url: redirect_url
     }.delete_if{|k,v| v.nil?}
-    host.nil? ? DeveloperPortal::Engine.routes.url_helpers.create_session_url(params) : provider_sso_url(params)
+    host.nil? ?  System::UrlHelpers.cms_url_helpers.create_session_url(params) : System::UrlHelpers.system_url_helpers.provider_sso_url(params)
   end
 
   protected

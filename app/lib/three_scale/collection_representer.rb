@@ -3,9 +3,6 @@
 require 'roar/json/collection'
 require 'representable/hash/collection'
 
-require_dependency 'three_scale/representer'
-require_dependency 'three_scale/api/collection'
-
 class ThreeScale::CollectionRepresenter < ThreeScale::Representer
   include Representable::Hash::Collection
 
@@ -19,6 +16,15 @@ class ThreeScale::CollectionRepresenter < ThreeScale::Representer
 
     def to_xml(options = {})
       xml_collection.new(self).to_xml(options.merge(root: representation_wrap))
+    end
+  end
+
+  module JSONCollection
+    extend ActiveSupport::Concern
+    include Representable::JSON::Collection
+
+    def to_json(options = {})
+      ThreeScale::Api::Collection.new(self).to_json(options)
     end
   end
 end

@@ -12,4 +12,10 @@ class ProxyConfigs::AffectingObjectChangedEvent < ServiceRelatedEvent
       }
     )
   end
+
+  def self.valid?(proxy, *_args)
+    return unless proxy
+    account = proxy.account
+    account && !account.scheduled_for_deletion?
+  end
 end

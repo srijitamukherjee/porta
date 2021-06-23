@@ -10,6 +10,7 @@ module MethodRepresenter
   property :system_name
   property :friendly_name
   property :description
+  property :parent_id
 
   property :created_at
   property :updated_at
@@ -20,9 +21,5 @@ module MethodRepresenter
 
   link :self do
     polymorphic_url([:admin, :api, owner, parent, :methods], id: id)
-  end
-
-  def system_name
-    backend_api_metric? ? attributes['system_name'] : super
   end
 end

@@ -2,7 +2,7 @@
 
 <h2>
   User <%= h @user.display_name %> of the account <%= h @user.account.org_name %>
-  <%= link_to 'Edit', edit_resource_path(@user), :class => 'action edit' %>
+  <%= link_to 'Edit', edit_admin_buyers_account_user_path(account_id: @user.account_id, id: @user.id), class: 'action edit' %>
 </h2>
 
 <table class="list mini">
@@ -17,7 +17,7 @@
     <td><%= h @user.created_at.to_s(:long) %></td>
   </tr>
 
-  <% unless @user.last_login_at.blank? -%>
+  <% if @user.last_login_at.present? -%>
     <tr>
       <th>Last logged in on</th>
       <td><%= h @user.last_login_at.to_s(:long) %></td>

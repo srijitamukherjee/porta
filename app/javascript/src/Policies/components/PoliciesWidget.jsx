@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { bindActionCreators } from 'redux'
-import { actions } from 'Policies/actions/index'
+import * as actions from 'Policies/actions'
 import { PolicyConfig } from 'Policies/components/PolicyConfig'
 import { PolicyChain } from 'Policies/components/PolicyChain'
 import { PolicyRegistry } from 'Policies/components/PolicyRegistry'
@@ -10,15 +10,12 @@ import { PolicyChainHiddenInput } from 'Policies/components/PolicyChainHiddenInp
 import { connect } from 'react-redux'
 import { isPolicyChainChanged } from 'Policies/util'
 
-import type { ChainPolicy } from 'Policies/types/Policies'
-import type { State, RegistryState, ChainState, UIState } from 'Policies/types/State'
-import type { Dispatch } from 'Policies/types/index'
-import type { IPoliciesActions } from 'Policies/actions'
+import type { ChainPolicy, State, RegistryPolicy, UIState, Dispatch, IPoliciesActions } from 'Policies/types'
 
 type Props = {
-  registry: RegistryState,
-  chain: ChainState,
-  originalChain: ChainState,
+  registry: Array<RegistryPolicy>,
+  chain: Array<ChainPolicy>,
+  originalChain: Array<ChainPolicy>,
   policyConfig: ChainPolicy,
   ui: UIState,
   boundActionCreators: IPoliciesActions
@@ -33,23 +30,24 @@ const mapStateToProps = (state: State) => ({
 })
 
 const mapDispatchToProps = (dispatch: Dispatch) => ({
+  // $FlowIgnore[incompatible-call] flow complaining because importing all actions at once
   boundActionCreators: bindActionCreators(actions, dispatch)
 })
 
 const PolicyList = ({ registry, chain, originalChain, policyConfig, ui, boundActionCreators }: Props) => {
   const chainActions = {
     openPolicyRegistry: boundActionCreators.openPolicyRegistry,
-    editPolicy: boundActionCreators.editPolicy,
+    editPolicy: boundActionCreators.openPolicyForm,
     sortPolicyChain: boundActionCreators.sortPolicyChain
   }
   const policyConfigActions = {
-    submitPolicyConfig: boundActionCreators.submitPolicyConfig,
+    submitPolicyConfig: boundActionCreators.submitPolicyForm,
     removePolicyFromChain: boundActionCreators.removePolicyFromChain,
-    closePolicyConfig: boundActionCreators.closePolicyConfig,
+    closePolicyConfig: boundActionCreators.closePolicyForm,
     updatePolicyConfig: boundActionCreators.updatePolicyConfig
   }
   const policyRegistryActions = {
-    addPolicy: boundActionCreators.addPolicy,
+    addPolicy: boundActionCreators.addPolicyFromRegistry,
     closePolicyRegistry: boundActionCreators.closePolicyRegistry
   }
 
@@ -69,38 +67,22 @@ const PolicyList = ({ registry, chain, originalChain, policyConfig, ui, boundAct
     // classList.toggle second argument is not supported in IE11
     if (isPolicyChainChanged(chain, originalChain)) {
       submitButton.removeAttribute('disabled')
-      submitButton.classList.remove('disabled-button')
-      submitButton.classList.add('important-button')
     } else {
       submitButton.setAttribute('disabled', '')
-      submitButton.classList.add('disabled-button')
-      submitButton.classList.remove('important-button')
     }
   }
 
   return (
     <div className="PoliciesWidget">
-      <PolicyChain
-        chain={chain}
-        visible={ui.chain}
-        actions={chainActions}
-      />
-      <PolicyRegistry
-        items={registry}
-        visible={ui.registry}
-        actions={policyRegistryActions}
-      />
-      <PolicyConfig
-        visible={ui.policyConfig}
-        policy={policyConfig}
-        actions={policyConfigActions}
-      />
+      {ui.chain && <PolicyChain chain={chain} actions={chainActions} />}
+      {ui.registry && <PolicyRegistry items={registry} actions={policyRegistryActions} />}
+      {ui.policyConfig && <PolicyConfig policy={policyConfig} actions={policyConfigActions} />}
       <PolicyChainHiddenInput policies={chain} />
     </div>
   )
 }
 
-// $FlowFixMe: Redux types should work out of the box
+// $FlowIgnore[signature-verification-failure] no need to verify signature
 const PoliciesWidget = connect(
   mapStateToProps,
   mapDispatchToProps

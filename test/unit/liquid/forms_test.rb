@@ -1,7 +1,7 @@
 require 'test_helper'
 
 class Liquid::FormsTest < ActiveSupport::TestCase
-  include ThreeScale::PrivateModule(Rails.application.routes.url_helpers)
+  include ThreeScale::PrivateModule(System::UrlHelpers.system_url_helpers)
 
   test 'unknown form name' do
     assert_raises(Liquid::Forms::NotFoundError) do
@@ -27,7 +27,9 @@ class Liquid::FormsTest < ActiveSupport::TestCase
   end
 
   test 'password_reset form' do
-    form = get('password_reset', "  ")
+    form = get('password_reset', 'site_account')
+    account = FactoryBot.create(:account)
+    form.context['site_account'] = Liquid::Drops::Account.new(account)
     content = form.render('content')
     assert_match %r{<form.*action="/admin/account/password".*</form>}, content
   end

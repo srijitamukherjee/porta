@@ -22,9 +22,9 @@ class PostOffice < ActionMailer::Base
       subject = "[msg] #{message.subject}"
 
       msg_url = if recipient.receiver.buyer?
-        developer_portal.admin_messages_inbox_url(recipient, host: recipient.receiver.provider_account.domain)
+        developer_portal.admin_messages_inbox_url(recipient, host: recipient.receiver.provider_account.external_domain)
                 else # provider or master
-        provider_admin_messages_inbox_url(recipient, host: recipient.receiver.self_domain)
+        provider_admin_messages_inbox_url(recipient, host: recipient.receiver.external_self_domain)
                 end
 
       @sender = message.sender.org_name
@@ -38,34 +38,30 @@ class PostOffice < ActionMailer::Base
            :bcc => bcc, :cc => cc, :from => from, :reply_to => reply_to)
     end
   rescue ArgumentError => e
-    # More details for errors like: https://3scale.airbrake.io/projects/14982/groups/69448607
     new_message = "Message(#{message.id}),Recipient(#{recipient.id}): #{e.message}"
     raise ArgumentError.new(new_message)
   end
 
   def report(report, period)
     account = report.account
+    service_name = report.service.name
 
     headers(
       'Return-Path' => from_address(account),
       'X-SMTPAPI' => '{"category": "Report"}'
     )
 
-    attachments["report-#{service_name(report)}.pdf"] = File.read(report.report.path)
+    attachments[report.pdf_file_name] = File.read(report.report.path)
 
     mail(
-      :subject => "3scale: #{service_name(report)} - #{period}",
-      :body => "Service: #{service_name(report)}\n\nPlease find attached your API Usage Report from 3scale.\n",
+      :subject => "3scale: #{service_name} - #{period}",
+      :body => "Service: #{service_name}\n\nPlease find attached your API Usage Report from 3scale.\n",
       :bcc => account.admins.map(&:email),
       :from => from_address(account)
     )
   end
 
   private
-
-  def service_name(report)
-    report.service.name
-  end
 
   def emails_for_message(message, recipient)
     sender = message.sender

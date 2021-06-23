@@ -7,56 +7,28 @@ import 'core-js/es7/object'
 import 'whatwg-fetch'
 
 import React from 'react'
-import { render } from 'react-dom'
-import { AppContainer } from 'react-hot-loader'
+
 import Root from 'Policies/components/Root'
 import configureStore from 'Policies/store/configureStore'
 import { initialState } from 'Policies/reducers/initialState'
-import { actions } from 'Policies/actions/index'
+import { populateChainFromConfigs } from 'Policies/actions'
+import { createReactWrapper } from 'utilities'
 
-import type { RawRegistry, StoredChainPolicy } from 'Policies/types/Policies'
+import type { RegistryPolicy, PolicyConfig } from 'Policies/types'
 
 import 'Policies/styles/policies.scss'
 
-const Policies = (store, elementId) => {
-  const element = document.getElementById(elementId)
-
-  if (element === null) {
-    console.error(`Policies cannot be rendered. Id '${elementId}' is not an element of the DOM.`)
-    return
-  }
-
-  render(
-    <AppContainer>
-      <Root store={store} />
-    </AppContainer>,
-    element
-  )
-
-  if (module.hot) {
-    module.hot.accept('./components/Root', () => {
-      const NewRoot = require('./components/Root').default
-      render(
-        <AppContainer>
-          <NewRoot store={store} />
-        </AppContainer>,
-        element
-      )
-    })
-  }
-}
-
-type InitPolicies = {
-  element: string,
-  registry: RawRegistry,
-  chain: StoredChainPolicy[],
+type PoliciesProps = {
+  registry: RegistryPolicy[],
+  chain: PolicyConfig[],
   serviceId: string
 }
 
-const initPolicies = ({element, registry, chain, serviceId}: InitPolicies) => {
+const PoliciesWrapper = ({registry, chain, serviceId}: PoliciesProps, elementId: string): void => {
   const store = configureStore(initialState)
-  store.dispatch(actions.populatePolicies(serviceId, chain, registry))
-  return Policies(store, element)
+  store.dispatch(populateChainFromConfigs(serviceId, chain, registry))
+
+  return createReactWrapper(<Root store={store} />, elementId)
 }
 
-export default initPolicies
+export { PoliciesWrapper }

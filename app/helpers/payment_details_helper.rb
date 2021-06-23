@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module PaymentDetailsHelper
 
   def credit_card_terms_url
@@ -28,19 +30,7 @@ module PaymentDetailsHelper
   end
 
   def merchant_countries
-    ActiveMerchant::Country::COUNTRIES.map{|c| c[:name] }
-  end
-
-  #TODO: move these two methods to another helper
-  def build_url(path)
-    full_path = "#{site_account.domain}#{local_postfix_and_port}/#{path}".gsub(/[\/]+/, '/')
-    "https://#{full_path}"
-  end
-
-  def local_postfix_and_port
-    if ["test", "development"].include?(Rails.env)
-      request.host_with_port.gsub(site_account.domain, '').gsub(/\/.*/, '/')
-    end
+    ActiveMerchant::Country::COUNTRIES.map{|c| [c[:name], c[:alpha2]] }
   end
 
   def payment_details_definition_list_item(name, account)
@@ -51,4 +41,24 @@ module PaymentDetailsHelper
     definition_list_item += content_tag :dd, value.presence, class: 'u-dl-definition'
     definition_list_item
   end
+
+  def stripe_billing_address_json
+    return unless logged_in?
+
+    billing_address = current_account.billing_address
+    {
+      line1: billing_address.address1,
+      line2: billing_address.address2,
+      city: billing_address.city,
+      state: billing_address.state,
+      postal_code: billing_address.zip,
+      country: billing_address.country
+    }.to_json
+  end
+
+  def get_country_code(billing_address_data)
+    _label, code = merchant_countries.find {|label, code| label.downcase == billing_address_data.country.to_s.downcase }
+    code
+  end 
+
 end

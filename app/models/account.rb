@@ -1,21 +1,14 @@
 # frozen_string_literal: true
 
 class Account < ApplicationRecord
-  # Hack to remove all the attributes with names matching the regex from @attributes
-  # It is enough for rails not persisting them in actual columns.
-  def self.columns
-    super.reject {|column| /\Apayment_gateway_(type|options)|deleted_at|service_preffix|first_admin_id\Z/ =~ column.name }
-  end
+  attribute :credit_card_expires_on, :date
 
   # need to reset column information to clear column_names and such
   reset_column_information
 
-  set_date_columns :credit_card_expires_on
-
   # it has to be THE FIRST callback after create, so associations get the tenant id
   after_create :update_tenant_id, if: :provider?, prepend: true
 
-  include ::ThreeScale::MethodTracing
 
   include Fields::Fields
   required_fields_are :org_name
@@ -57,6 +50,28 @@ class Account < ApplicationRecord
   include Gateway
   include States
   include ProviderDomains
+  include AccountIndex::ForAccount
+
+  self.background_deletion = [
+    :users,
+    :mail_dispatch_rules,
+    [:api_docs_services, { class_name: 'ApiDocs::Service' }],
+    :services,
+    :contracts,
+    :account_plans,
+    [:settings, { action: :destroy, class_name: 'Settings', has_many: false }],
+    [:payment_detail, { action: :destroy, has_many: false }],
+    [:buyer_accounts, { action: :destroy, class_name: 'Account' }],
+    [:payment_gateway_setting, { action: :destroy, has_many: false }],
+    [:profile, { action: :delete, has_many: false }],
+    [:templates, { action: :delete, class_name: 'CMS::Template' }],
+    [:sections, { action: :delete, class_name: 'CMS::Section' }],
+    [:provided_sections, { action: :delete, class_name: 'CMS::Section' }],
+    [:redirects, { action: :delete, class_name: 'CMS::Redirect' }],
+    [:files, { action: :delete, class_name: 'CMS::File' }],
+    [:builtin_pages, { action: :delete, class_name: 'CMS::BuiltinPage' }],
+    [:provided_groups, { action: :delete, class_name: 'CMS::Group' }]
+  ].freeze
 
   #TODO: this needs testing?
   scope :providers, -> { where(provider: true) }
@@ -317,7 +332,7 @@ class Account < ApplicationRecord
   # database lookup if possible (uses cache), so it is super fast.
   def self.id_from_api_key(api_key)
     Rails.cache.fetch("account_ids/#{api_key}") do
-      Account.find_by_provider_key!(api_key).id # rubocop:disable Rails/DynamicFindBy
+      Account.first_by_provider_key!(api_key).id # rubocop:disable Rails/DynamicFindBy
     end
   end
 
@@ -337,17 +352,6 @@ class Account < ApplicationRecord
 
   # def self.to_csv
   # end
-
-  def heroku?
-    # TODO: Move to other file?
-    #       Change logic?
-    partner.present? && partner.system_name == 'heroku'
-  end
-
-  # Display name for account. Handy for situations where org_name is empty.
-  def display_name
-    org_name.empty? ? admins.first.username : org_name
-  end
 
   def emails
     admins.map(&:email).compact
@@ -465,6 +469,7 @@ class Account < ApplicationRecord
   # TODO: should be multiple_applications_enabled?
   # don't freak out, this is a legacy naming
   def multiple_applications_allowed?
+    return false unless settings
     settings.multiple_applications.visible?
   end
 
@@ -485,6 +490,8 @@ class Account < ApplicationRecord
       if provider?
         xml.admin_domain admin_domain
         xml.domain domain
+        xml.admin_base_url admin_base_url
+        xml.base_url base_url
         xml.from_email from_email
         xml.support_email support_email
         xml.finance_support_email finance_support_email
@@ -516,8 +523,6 @@ class Account < ApplicationRecord
 
     xml.to_xml
   end
-
-  add_three_scale_method_tracer :to_xml, 'ActiveRecord/Account/to_xml'
 
   def generate_s3_prefix
     self.s3_prefix = if org_name
@@ -552,10 +557,6 @@ class Account < ApplicationRecord
     else
       id
     end
-  end
-
-  def independent_mapping_rules_enabled?
-    provider_can_use?(:api_as_product) || provider_can_use?(:independent_mapping_rules)
   end
 
   private

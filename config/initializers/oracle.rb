@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 if System::Database.oracle?
-  require 'arel/visitors/oracle12'
+  require 'arel/visitors/oracle12_hack'
   ENV['SCHEMA'] = 'db/oracle_schema.rb'
   Rails.configuration.active_record.schema_format = ActiveRecord::Base.schema_format = :ruby
 
@@ -23,6 +23,7 @@ if System::Database.oracle?
   ActiveRecord::ConnectionAdapters::OracleEnhancedAdapter.class_eval do
     remove_const(:IDENTIFIER_MAX_LENGTH)
     const_set(:IDENTIFIER_MAX_LENGTH, 128)
+    remove_method(:log)
 
     prepend(Module.new do
       def add_column(table_name, column_name, type, options = {})
@@ -39,17 +40,26 @@ if System::Database.oracle?
       # The team behind it believes `Table.update_all(column: 'text')`
       # should wipe all your data in that column: https://github.com/rsim/oracle-enhanced/issues/1588#issuecomment-343353756
       # So we try to convert the text to using `to_clob` function.
-      def quote(value, column = nil)
-        type = column&.type
-
-        case value && type
-        when :text, :binary
+      def _quote(value)
+        case value
+        when ActiveModel::Type::Binary::Data
           # I know this looks ugly, but that just modified copy paste of what the adapter does (minus the rescue).
           # It is a bit improved in next version due to ActiveRecord Attributes API.
-          %{to_#{(type_to_sql(type) || 'blob').downcase}(#{quote(value)})}
+          %{to_blob(#{quote(value.to_s)})}
+        when ActiveRecord::OracleEnhanced::Type::Text::Data
+          %{to_clob(#{quote(value.to_s)})}
         else
           super
         end
+      end
+
+      protected
+      # Patches broken compatibility with ActiveRecord::ConnectionAdapters::AbstractAdapter#log that now expects `type_casted_binds`
+      def log(sql, name = "SQL", binds = [], statement_name = nil) #:nodoc:
+        type_casted_binds = binds.map { |attr| type_cast(attr.value_for_database) }
+        super(sql, name, binds, type_casted_binds, statement_name)
+      ensure
+        log_dbms_output if dbms_output_enabled?
       end
     end)
   end
@@ -125,7 +135,7 @@ if System::Database.oracle?
 
       if is_delta
         if adapter.class.name.downcase[/oracle/]
-          "((#{table_name}.#{column_name} - SYSDATE) * 60 * 60 * 24) + #{@threshold} > 0"
+          "EXTRACT( day from ((#{table_name}.#{column_name} - SYSDATE) * 60 * 60 * 24)) + #{@threshold} > 0"
         else
           super
         end

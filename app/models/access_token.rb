@@ -5,6 +5,10 @@ class AccessToken < ApplicationRecord
 
   serialize :scopes, Array
 
+  audited only: %i[owner_id scopes name permission created_at updated_at]
+
+  delegate :provider_id_for_audits, to: :owner
+
   def self.options_to_hash(options)
     options.map do |key|
       [I18n.t(key, scope: :access_token_options), key]
@@ -114,11 +118,6 @@ class AccessToken < ApplicationRecord
   attr_accessible :owner, :name, :scopes, :permission
 
   attr_readonly :value
-
-  # will be removed once deployed
-  def self.columns
-    super.reject { |column| column.name == 'owner_type' }
-  end
 
   def self.find_from_value(value)
     find_by(value: value.to_s.scrub)

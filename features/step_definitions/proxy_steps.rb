@@ -2,24 +2,6 @@ Then /^I should be offered to download an? "(.+?)" file$/ do |mime_type|
   assert_equal mime_type, page.response_headers['Content-Type']
 end
 
-Given(/^I'm using a custom API Backend$/) do
-  steps %{
-    When I go to the integration page for service "one"
-    And I fill in "Private Base URL" with "http://www.google.com"
-  }
-  stub_deploy_calls!
-
-  click_on 'proxy-button-save-and-deploy'
-end
-
-Then(/^I should be able to switch back to using the default API Backend$/) do
-  link = XPath::HTML.link "Use Echo API"
-
-  page.should have_xpath(link, visible: true)
-  find(:xpath, link).click
-  page.should_not have_xpath(link, visible: true)
-end
-
 Then(/^I can edit the proxy public endpoint$/) do
 
   step %(I go to the integration page for service "#{@provider.first_service!.name}")
@@ -53,7 +35,7 @@ Then(/^I should see the Policy Chain$/) do
   page.should have_css(".PolicyChain")
   page.should have_css(".Policy")
   page.should have_text("APIcast policy")
-  page.should have_css(".PolicyRegistryList.is-hidden", visible: :hidden)
+  page.should_not have_css(".PolicyRegistryList")
 end
 
 
@@ -73,32 +55,28 @@ Given(%r{^the service uses app_id/app_key as authentication method$}) do
   @service.update_attributes!(backend_version: '2')
 end
 
-Given(/^I add a new mapping rule with method "([^"]*)" pattern "([^"]*)" delta "([^"]*)" and metric "([^"]*)"$/) do |method, pattern, delta, metric|
-  click_on 'add-proxy-rule'
-  within(page.find('#sortable tr:last-child')) do
-    find("td.http_method select option[value='#{method}']").select_option
-    find('td.pattern input').set pattern
-    find('td.delta input').set delta
-    find('td.metric select').find(:xpath, "//*[.='#{metric}']").select_option
+Given(/^I add a new mapping rule with method "([^"]*)" pattern "([^"]*)" position "([^"]*)" and metric "([^"]*)"$/) do |method, pattern, position, metric|
+  visit "#{URI.parse(current_url).path}/new"
+  within('#new-mapping-rule-form form') do
+    pf4_select(method, from: 'Verb')
+    find('input#proxy_rule_pattern').set pattern
+    find('input#proxy_rule_position').set position
+    within('#wrapper_metric') do
+      find('.pf-c-radio__input').set(true)
+      select = find('.pf-c-select')
+      within select do
+        find('.pf-c-select__toggle').click unless select['class'].include?('pf-m-expanded')
+        click_on(metric)
+      end
+    end
   end
+  click_on 'Create Mapping Rule'
 end
 
-Given(/^I drag the last mapping rule to the position (\d+)$/) do |position|
-  within(page.find('#sortable')) do
-    last_index = all('tr').count
-    element = page.find("tr:nth-child(#{last_index}) .ui-sortable-handler")
-    target = page.find("tr:nth-child(#{position})")
-    element.drag_to(target)
-  end
-end
-
-Given(/^I save the proxy config$/) do
-  click_on 'proxy-button-save-and-deploy'
-end
+MAPPING_RULE_ATTR = %w[http_method pattern position metric].freeze
 
 Then(/^the mapping rules should be in the following order:$/) do |table|
   data = @provider.default_service.proxy.proxy_rules.includes(:metric).ordered
-  MAPPING_RULE_ATTR = %w[http_method pattern delta metric].freeze
   data.each_with_index do |mapping_rule, index|
     MAPPING_RULE_ATTR.each do |attr|
       actual_value = mapping_rule.public_send(attr)

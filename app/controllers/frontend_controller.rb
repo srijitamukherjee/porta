@@ -1,4 +1,14 @@
+# frozen_string_literal: true
+
 class FrontendController < ApplicationController
+  SecureHeaders::Configuration.override(:disable_x_frame) do |config|
+    config.x_frame_options = SecureHeaders::OPT_OUT
+  end
+
+  SecureHeaders::Configuration.override(:disable_x_content_type) do |config|
+    config.x_content_type_options = SecureHeaders::OPT_OUT
+  end
+
   include SiteAccountSupport
   include AccessCodeProtection
 
@@ -29,11 +39,13 @@ class FrontendController < ApplicationController
 
   private
 
-  def apiap?
-    current_account.provider_can_use?(:api_as_product)
+  def disable_x_content_type
+    use_secure_headers_override(:disable_x_content_type)
   end
 
-  helper_method :apiap?
+  def disable_x_frame
+    use_secure_headers_override(:disable_x_frame)
+  end
 
   def do_nothing_if_head
     render head: :success, nothing: true if request.head?
@@ -114,57 +126,39 @@ class FrontendController < ApplicationController
     end
   end
 
-  def find_service(id = params[:service_id])
-    services = if current_account.try!(:provider?)
-      current_account.accessible_services
-               else
-      site_account.accessible_services
-    end
+  def accessible_services
+    return site_account.accessible_services unless current_account.try!(:provider?)
+    current_account.accessible_services.merge(Service.permitted_for(current_user))
+  end
 
-    @service = id.present? ? services.find(id) : services.default
+  def find_service(id = params[:service_id])
+    @service = id.present? ? accessible_services.find(id) : accessible_services.default
   end
 
   def ensure_provider
-    unless current_account.provider?
-      render_error 'Not authorized', :status => :not_authorized
-      false
-    else
-      true
-    end
+    return if current_account.provider?
+    render_error 'Not authorized', :status => :not_authorized
+    false
   end
 
   def ensure_provider_domain
-    unless Account.is_admin_domain?(request.host) || site_account.master?
-      notify_about_wrong_domain(request.url, :provider, error_request_data)
-      render_wrong_domain_error
-      false
-    else
-      true
-    end
+    return if Account.is_admin_domain?(internal_host) || site_account.master?
+    notify_about_wrong_domain(request.url, :provider, error_request_data)
+    render_wrong_domain_error
+    false
   end
 
   def ensure_buyer_domain
-    if Account.is_admin_domain?(request.host) || site_account.master?
-      notify_about_wrong_domain(request.url, :buyer, error_request_data)
-      render_wrong_domain_error
-      false
-    else
-      true
-    end
+    return unless Account.is_admin_domain?(internal_host) || site_account.master?
+    notify_about_wrong_domain(request.url, :buyer)
+    render_wrong_domain_error
   end
 
   def ensure_master_domain
-    unless Account.is_master_domain?(request.host)
-      notify_about_wrong_domain(request.url, :master, error_request_data)
-      render_wrong_domain_error
-      false
-    else
-      true
-    end
-  end
-
-  def error_request_data
-    defined?(Airbrake) ? airbrake_request_data : {}
+    return if Account.is_master_domain?(internal_host)
+    notify_about_wrong_domain(request.url, :master)
+    render_wrong_domain_error
+    false
   end
 
   def render_wrong_domain_error

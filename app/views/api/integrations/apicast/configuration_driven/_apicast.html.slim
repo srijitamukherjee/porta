@@ -1,74 +1,88 @@
-section.Configuration class=('Configuration--is-promoted' unless deployment_option_is_service_mesh?(@service)) class="Configuration--#{@show_presenter.test_state_modifier}"
-  - unless apiap?
-    = link_to edit_deployment_option_title(@service), edit_admin_service_integration_path(@service), class: 'SettingsBox-toggle'
-
-  article.Configuration-summary data-state="open" class=("Environment--#{@show_presenter.test_state_modifier}" unless deployment_option_is_service_mesh?(@service))
+section.Configuration class=('Configuration--is-promoted' unless deployment_option_is_service_mesh?(@service))
+  article.Configuration-summary data-state="open"
     h3.Configuration-title = deployment_option_is_service_mesh?(@service) ? 'Service mesh Configuration' : 'APIcast Configuration'
 
     dl.u-dl
-      - unless deployment_option_is_service_mesh?(@service)
-        - if current_account.provider_can_use?(:api_as_product)
-          - backend_api_configs = @service.backend_api_configs
-          dt.u-dl-term Private Base #{'URL'.pluralize backend_api_configs.count}
-          dd.u-dl-definition
-            ul
-            - for backend_api_config in backend_api_configs
-              li
-                code
-                  ' /#{backend_api_config.path.presence} =>
-                = backend_api_config.backend_api.private_endpoint
-        - else
-          dt.u-dl-term Private Base URL
-          dd.u-dl-definition = @proxy.api_backend
+      dt.u-dl-term
+        h4
+          => icon('cubes')
+          = @service.name
+      dd.u-dl-definition
+      / TODO: THREESCALE-3759 remove this and associated stuff
+      / - elsif !deployment_option_is_service_mesh?(@service)
 
       dt.u-dl-term Mapping rules
-      dd.u-dl-definition
-        - if (last_rule = @proxy.proxy_rules.last)
-          code
-            ' #{last_rule.pattern} => #{last_rule.metric.name}
-        - if (rules_size = @proxy.proxy_rules.size) > 1
-          | and #{rules_size - 1} more.
+      dd.u-dl-definition = proxy_rules_preview(@proxy)
+
       - unless deployment_option_is_service_mesh?(@service)
         dt.u-dl-term Credential Location
         dd.u-dl-definition = @proxy.credentials_location
         dt.u-dl-term Secret Token
         dd.u-dl-definition = @proxy.secret_token
 
-    - if apiap?
-      div
+      - unless deployment_option_is_service_mesh?(@service)
+        - @service.backend_api_configs.sorted_for_proxy_config.includes(:backend_api).each do |backend_api_config|
+          - backend_api = backend_api_config.backend_api
+          div.Configuration-backend-summary
+            dt.u-dl-term
+              h4
+                => icon('cube')
+                = backend_api.name
+            dd.u-dl-definition = backend_routing_rule(backend_api_config)
+            dt.u-dl-term Mapping rules
+            dd.u-dl-definition = proxy_rules_preview(backend_api, path: backend_api_config.path)
+      dt.u-dl-term Promote
+      dd.u-dl-definition.Configuration-promote-button
         = semantic_form_for @proxy, url: admin_service_integration_path(@service) do |f|
-          = f.buttons class: "buttons buttons-inline" do
-            = f.hidden_field :lock_version
-            = f.button *promote_to_staging_button_options(@show_presenter)
+          = f.hidden_field :lock_version
+          = f.button *promote_to_staging_button_options(@show_presenter)
 
 - unless deployment_option_is_service_mesh?(@service)
   section style="margin-top: 48px;"
-    h2 Environments
 
-    .SettingsBox.Environment class=('Environment--is-promoted' if @show_presenter.environments_have_same_config?) class="Environment--#{@show_presenter.test_state_modifier}"
-      = link_to 'Configuration history', admin_service_proxy_configs_path(@service, environment: 'staging'), class: 'SettingsBox-toggle'
-      article.Environment-summary data-state="open" class="Environment--#{@show_presenter.test_state_modifier}"
-        h3.Environment-title Staging Environment
+    .SettingsBox.Environment class=('Environment--is-promoted' if @show_presenter.environments_have_same_config?)
+      = pf_link_to 'Configuration history', admin_service_proxy_configs_path(@service, environment: 'staging'), class: 'SettingsBox-toggle'
+      article.Environment-summary data-state="open"
+        h3.Environment-title Staging APIcast
         - if @show_presenter.any_sandbox_configs?
-          = @show_presenter.staging_proxy_endpoint
-          .ConfigurationVersion
-            ' v.
-            = @show_presenter.last_sandbox_config.version
-          = semantic_form_for @proxy, url: promote_to_production_admin_service_integration_path(@service, anchor: 'production'), html: { class: 'PromoteForm' } do |f|
-            = f.buttons class: "buttons buttons-inline" do
-              = f.button *promote_to_production_button_options(@show_presenter)
+          dl.u-dl
+            dt.u-dl-term URL
+            dd.u-dl-definition = @show_presenter.staging_proxy_endpoint
+            - unless @service.oauth?
+              dt.u-dl-term Example curl for testing
+              dd.u-dl-definition
+                = api_test_curl(@proxy)
+                - unless @service.cinstances.any?
+                  br
+                  br
+                  hr
+                  em
+                    => t('api.integrations.proxy.curl.no_application')
+                    - unless @service.application_plans.any?
+                      = link_to t('api.integrations.proxy.curl.no_application_plan'), admin_service_application_plans_path(@service)
+            dt.u-dl-term Version
+            dd.u-dl-definition
+              ' v.
+              = @show_presenter.last_sandbox_config.version
+            dt.u-dl-term Promote
+            dd.u-dl-definition.Configuration-promote-button
+              = semantic_form_for @proxy, url: promote_to_production_admin_service_integration_path(@service, anchor: 'production') do |f|
+                = f.button *promote_to_production_button_options(@show_presenter)
         - else
-          | no configuration has been saved for the staging environment yet
+          | no configuration has been saved for APIcast staging yet
 
     .SettingsBox.Environment
       - if @show_presenter.any_production_configs?
-        = link_to 'Configuration history', admin_service_proxy_configs_path(@service, environment: 'production'), class: 'SettingsBox-toggle'
-      article.Environment-summary class=("Environment--#{@show_presenter.test_state_modifier}" if @show_presenter.environments_have_same_config?) data-state="open" style="margin-top: 24px;"
-        h3.Environment-title Production Environment
+        = pf_link_to 'Configuration history', admin_service_proxy_configs_path(@service, environment: 'production'), class: 'SettingsBox-toggle'
+      article.Environment-summary data-state="open" style="margin-top: 24px;"
+        h3.Environment-title Production APIcast
         - if @show_presenter.any_production_configs?
-          = @show_presenter.production_proxy_endpoint
-          .ConfigurationVersion
-            ' v.
-            = @show_presenter.last_production_config.version
+          dl.u-dl
+            dt.u-dl-term URL
+            dd.u-dl-definition = @show_presenter.production_proxy_endpoint
+            dt.u-dl-term Version
+            dd.u-dl-definition
+              ' v.
+              = @show_presenter.last_production_config.version
         - else
-          | no configuration has been saved for the production environment yet
+          | no configuration has been saved for APIcast production yet

@@ -10,16 +10,16 @@ end
 
 # Example:
 #
-#   When I hit "/potato" on domain "foo.example.com"
+#   When I hit "/potato" on domain "foo.3scale.localhost"
 #
 When /^I hit "([^"]*)" on ([^\s]+)$/ do |path,domain|
   step "the current domain is #{domain}"
   visit path
 end
 
-When /^current domain is the admin domain of (provider "[^"]*")$/ do |provider|
+When /^current domain is the (admin|master) domain of (provider "[^"]*")$/ do |level, provider|
   raise "Missing admin domain of #{provider.name}" if provider.admin_domain.blank?
-  step %(the current domain is #{provider.admin_domain})
+  step %(the current domain is #{level == 'admin' ? provider.admin_domain : 'the master domain'})
   @provider = provider
 end
 

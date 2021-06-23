@@ -7,16 +7,17 @@ class TopicMailerTest < ActionMailer::TestCase
   end
 
   test 'send mails' do
-    sender = FactoryBot.build_stubbed(:simple_user, account: @provider)
+    sender = FactoryBot.create(:simple_user, account: @provider)
     post =  FactoryBot.create(:post, user: sender)
     subscriber =  FactoryBot.build_stubbed(:simple_user, account: @buyer)
 
-    TopicMailer.new_post(subscriber, post).deliver_now
-    assert_equal 1, ActionMailer::Base.deliveries.count
+    assert_difference ActionMailer::Base.deliveries.method(:count), +1 do
+      TopicMailer.new_post(subscriber, post).deliver_now
+    end
   end
 
   test 'send from provider' do
-    sender =  FactoryBot.build_stubbed(:simple_user, account: @provider)
+    sender =  FactoryBot.create(:simple_user, account: @provider)
     post = FactoryBot.create(:post, user: sender)
     subscriber = FactoryBot.build_stubbed(:simple_user, account: @buyer)
 
@@ -26,7 +27,7 @@ class TopicMailerTest < ActionMailer::TestCase
   end
 
   test 'send from buyer' do
-    sender =  FactoryBot.build_stubbed(:simple_user, account: @buyer)
+    sender =  FactoryBot.create(:simple_user, account: @buyer)
     post = FactoryBot.create(:post, user: sender)
     subscriber = FactoryBot.build_stubbed(:simple_user, account: @buyer)
 

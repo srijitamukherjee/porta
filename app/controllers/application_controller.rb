@@ -1,8 +1,4 @@
 class ApplicationController < ActionController::Base
-  if ThreeScale::DevDomain.enabled?
-    include ThreeScale::DevDomain
-  end
-
   include AuthenticatedSystem
   include AccessControl
   include InheritedResources::DSL
@@ -12,11 +8,11 @@ class ApplicationController < ActionController::Base
 
   include ThreeScale::Analytics::SessionStoredAnalytics::Helper
   include ThreeScale::OnPremises
+  include ProxyConfigAffectingChanges::ControllerExtension
 
-  before_action :set_newrelic_custom_params
+  _helpers.module_eval { prepend DecoratorAdditions }
 
   protect_from_forgery with: :reset_session # See ActionController::RequestForgeryProtection for details
-  ensure_security_headers
 
   # Disable CSRF protection for non xml requests.
   skip_before_action :verify_authenticity_token, if: -> do
@@ -25,7 +21,6 @@ class ApplicationController < ActionController::Base
 
   before_action :set_timezone
 
-  before_action :report_google_experiments, if: proc { ThreeScale::Analytics::GoogleExperiments.enabled? }
   before_action :enable_analytics
   before_action :check_browser
 
@@ -94,7 +89,8 @@ class ApplicationController < ActionController::Base
     return if request_format.xml? || request_format.json?
 
     if current_user && browser_not_modern?
-      logout_keeping_session!
+      logout_killing_session!
+
       flash.now[:error] = "The browser you are using doesn't seem to support the X-Frame-Options header. That means we can't protect you against Cross Frame Scripting and thus not guarantee the security of your session. Please upgrade your browser and sign in again."
       redirect_to provider_admin_path
     end
@@ -116,41 +112,11 @@ class ApplicationController < ActionController::Base
     head(:ok) if (request.method == 'OPTIONS')
   end
 
-  def report_google_experiments
-    analytics_session.identify(google_experiments)
-    Rails.logger.debug { "Google Experiments: #{google_experiments}" }
-  rescue => error
-    System::ErrorReporting.report_error(error)
-  end
-
-  def google_experiments
-    return unless ThreeScale::Analytics::GoogleExperiments.enabled?
-
-    @__google_experiments ||= begin
-      utmx = cookies[:__utmx] || cookies[:__utmxx]
-      Rails.logger.debug {  "Google Experiment Cookie: #{utmx}" }
-      ThreeScale::Analytics::GoogleExperiments.from_cookie(utmx).to_hash
-    end
-  end
-
   # This before filter enables AnalyticsJsHelper#analytics block to yield
   # which is then used in provider/_analytics.html.erb to load Analytics.js
-  # it can be disabled per action like for ::Provider::SignupsController#testab.
 
   def enable_analytics
     @_analytics_enabled = true
-  end
-
-  def set_newrelic_custom_params
-    if defined? ::NewRelic
-      ::NewRelic::Agent.add_custom_attributes(:host => request.host,
-                                              :user_agent => request.user_agent )
-
-      if (user = current_user) && (account = current_account)
-        ::NewRelic::Agent.add_custom_attributes(user_id: user.id, user: user.email,
-                                                account: account.org_name, account_id: account.id)
-      end
-    end
   end
 
   def set_timezone
@@ -165,30 +131,6 @@ class ApplicationController < ActionController::Base
 
   def report_traffic
     ReportTrafficWorker.enqueue(current_account, metric_to_report, request, response)
-  end
-
-  class CustomCanCanControllerResource < CanCan::ControllerResource
-
-    def authorization_action
-      action = @params[:action].to_sym
-
-      if @controller.request.get? && !%i(index edit).include?(action)
-        :show
-      else
-        super
-      end
-    end
-  end
-
-  # CanCanCan
-  # [default] custom controller [GET] methods are being authorized separately
-  # [custom] custom controller [GET] methods are being authorized as show method
-  def self.cancan_resource_class
-    if ancestors.map(&:to_s).include? 'InheritedResources::Actions'
-      CanCan::InheritedResource
-    else
-      CustomCanCanControllerResource
-    end
   end
 
   private
@@ -259,31 +201,6 @@ class ApplicationController < ActionController::Base
     # to cut the action processing if this is used as a last
     # call of a before_action
     false
-  end
-
-  def target_host(provider)
-    return target_host_preview(provider) if Rails.env.preview?
-
-    dev_domain = ThreeScale.config.dev_gtld
-    if request.host.ends_with?(".#{dev_domain}")
-      "#{provider.admin_domain}.#{dev_domain}:#{request.port}"
-    else
-      provider.admin_domain
-    end
-  end
-
-  def target_host_preview(provider)
-    preview = request_target_host.match(/(preview\d+)/).try(:[], 0)
-    provider.admin_domain.sub(/\.3scale\.net\z/, ".#{preview}.#{ThreeScale.config.superdomain}")
-  end
-
-  def request_target_host
-    x_forwarded_for_domain = request.headers['X-Forwarded-For-Domain']
-    if Rails.env.preview? && x_forwarded_for_domain
-      request.host_with_port.sub(request.host, x_forwarded_for_domain)
-    else
-      request.host_with_port
-    end
   end
 
   def safe_return_to(url)

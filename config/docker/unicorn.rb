@@ -3,7 +3,7 @@ require 'pathname'
 require 'etc'
 
 app_path = Pathname.pwd
-
+require app_path.join('lib/prometheus_exporter_port').to_s
 
 Unicorn::HttpServer::START_CTX[0] = '/usr/local/bin/unicorn'
 
@@ -32,6 +32,7 @@ worker_processes detect_unicorn_workers.call
 
 # listen to the default port
 listen Integer(ENV['PORT'] || 3000)
+listen PrometheusExporterPort.call
 
 stderr_path '/dev/stderr'
 stdout_path '/dev/stdout'

@@ -8,7 +8,7 @@ class ThreeScale::Api::Responder < ActionController::Responder
 
     case
     when get?
-      display(resource, status: :ok) if controller.stale?(resource)
+      display(resource, status: :ok) if controller.stale?(serializable.dup)
     when post? # create
       display resource, status: :created, location: api_location
     when put? || patch? # update
@@ -30,6 +30,8 @@ class ThreeScale::Api::Responder < ActionController::Responder
       params.merge!(controller.request.query_parameters)
       params[:id] = resource.id
       params[:action] = :show
+      # Permitting all parameters here but it is not really secure
+      params.permit! if params.respond_to?(:permit!)
       controller.url_for(params)
     end
   end

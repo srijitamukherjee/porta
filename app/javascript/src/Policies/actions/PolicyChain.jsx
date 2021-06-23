@@ -2,8 +2,7 @@
 
 import { RSAA } from 'redux-api-middleware'
 
-import type { RSSAAction } from 'Policies/types/index'
-import type { RegistryPolicy, ChainPolicy, StoredChainPolicy } from 'Policies/types/Policies'
+import type { RSSAAction, RegistryPolicy, ChainPolicy, PolicyConfig } from 'Policies/types'
 
 export type AddPolicyToChainAction = { type: 'ADD_POLICY_TO_CHAIN', policy: RegistryPolicy }
 export function addPolicyToChain (policy: RegistryPolicy): AddPolicyToChainAction {
@@ -30,9 +29,9 @@ export function updatePolicyChain (payload: Array<ChainPolicy>): UpdatePolicyCha
   return { type: 'UPDATE_POLICY_CHAIN', payload }
 }
 
-export type LoadChainAction = { type: 'LOAD_CHAIN', storedChain: Array<StoredChainPolicy> }
-export function loadChain (storedChain: Array<StoredChainPolicy>): LoadChainAction {
-  return { type: 'LOAD_CHAIN', storedChain }
+export type LoadChainAction = { type: 'LOAD_CHAIN', policiesConfig: Array<PolicyConfig> }
+export function loadChain (policiesConfig: Array<PolicyConfig>): LoadChainAction {
+  return { type: 'LOAD_CHAIN', policiesConfig }
 }
 
 export type LoadChainSuccessAction = { type: 'LOAD_CHAIN_SUCCESS', payload: Array<ChainPolicy> }
@@ -40,13 +39,13 @@ export function loadChainSuccess (payload: Array<ChainPolicy>): LoadChainSuccess
   return { type: 'LOAD_CHAIN_SUCCESS', payload }
 }
 
-export type LoadChainErrorAction = { type: 'LOAD_CHAIN_ERROR', payload: Object }
-export function loadChainError (payload: Object): LoadChainErrorAction {
+export type LoadChainErrorAction = { type: 'LOAD_CHAIN_ERROR', payload: {} }
+export function loadChainError (payload: {}): LoadChainErrorAction {
   return { type: 'LOAD_CHAIN_ERROR', payload }
 }
 
 export type FetchChainSuccessAction = { type: 'FETCH_CHAIN_SUCCESS', payload: Array<ChainPolicy> }
-export type FetchChainErrorAction = { type: 'FETCH_CHAIN_ERROR', payload: Object }
+export type FetchChainErrorAction = { type: 'FETCH_CHAIN_ERROR', payload: {} }
 
 const REQUEST = { type: 'FETCH_CHAIN_REQUEST' }
 const SUCCESS = { type: 'FETCH_CHAIN_SUCCESS' }

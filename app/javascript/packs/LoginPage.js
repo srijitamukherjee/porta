@@ -1,14 +1,14 @@
 import '@babel/polyfill'
 import 'core-js/es7/object'
-import {isBrowserIE11} from 'utilities/ie11Utils'
+import {safeFromJsonString, isBrowserIE11} from 'utilities'
 
 const isIE11 = isBrowserIE11(window)
 if (isIE11) {
-    import('LoginPage/assets/styles/ie11-pf4BaseStyles.css')
+  // eslint-disable-next-line no-unused-expressions
+  import('LoginPage/assets/styles/ie11-pf4BaseStyles.css')
 }
 
 import {LoginPageWrapper} from 'LoginPage'
-import {safeFromJsonString} from 'utilities/json-utils'
 
 document.addEventListener('DOMContentLoaded', () => {
   const oldLoginWrapper = document.getElementById('old-login-page-wrapper')

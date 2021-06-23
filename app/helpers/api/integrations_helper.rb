@@ -1,35 +1,12 @@
+# frozen_string_literal: true
+
 module Api::IntegrationsHelper
-
-  def api_test_curl(proxy, production=false)
-    credentials = proxy.authentication_params_for_proxy
-    credentials_3scale = proxy.authentication_params_for_proxy(original_names: true)
-    extheaders = ''
-    query = ''
-
-    endpoint = "#{production ? proxy.default_production_endpoint : proxy.sandbox_endpoint}#{proxy.api_test_path}"
-
-    case proxy.credentials_location
-    when 'headers'
-      credentials.each { |k, v| extheaders += " -H'#{k}: #{v}'" }
-    when 'query'
-      test_path = proxy.api_test_path
-      if test_path
-        query = "#{(test_path.index('?') ? '&' : '?')}#{credentials.to_query}"
-      else
-        query = "?#{credentials.to_query}"
-      end
-    when 'authorization'
-      uri = URI(endpoint)
-
-      uri.user, uri.password = proxy.authorization_credentials
-
-      endpoint = uri.to_s
-    end
-
-    content_tag :code,
-                id: (production ? 'api-production-curl' : 'api-test-curl'),
-                'data-credentials' => credentials_3scale.to_json do
-      %(curl "#{endpoint}#{query}" #{extheaders})
+  def api_test_curl(proxy, production = false)
+    command = Apicast::CurlCommandBuilder.new(proxy, environment: production ? :production : :staging)
+    credentials = proxy.authentication_params_for_proxy(original_names: true)
+    tag_id = production ? 'api-production-curl' : 'api-test-curl'
+    content_tag :code, id: tag_id, 'data-credentials' => credentials.to_json do
+      command.to_s
     end
   end
 
@@ -64,14 +41,14 @@ module Api::IntegrationsHelper
     @service.proxy.apicast_configuration_driven
   end
 
-  def can_toggle_apicast_version?
-    current_account.provider_can_use?(:apicast_v2) && current_account.provider_can_use?(:apicast_v1)
+  def apicast_custom_urls?
+    # the idea would be to keep this rolling update disabled for saas
+    Rails.application.config.three_scale.apicast_custom_url
   end
 
-  def apicast_custom_urls?
+  def apicast_urls_readonly?
     # should always return true on prem (deployment option 'hosted') and only return true when self managed in saas (deployment option 'self_managed')
-    # so the idea would be to keep this rolling update disabled for saas
-    Rails.application.config.three_scale.apicast_custom_url || @service.proxy.self_managed?
+    !(apicast_custom_urls? || @service.proxy.self_managed?)
   end
 
   def custom_backend?
@@ -80,6 +57,7 @@ module Api::IntegrationsHelper
   end
 
   def apicast_endpoint_input_hint(service, environment:)
+    service.deployment_option ||= 'hosted'
     openshift = Rails.application.config.three_scale.apicast_custom_url && service.proxy.hosted?
     t( "formtastic.hints.proxy.endpoint_apicast_2#{'_openshift' if openshift}_html", environment_name: environment)
   end
@@ -88,34 +66,56 @@ module Api::IntegrationsHelper
     service.deployment_option =~ /^service_mesh/
   end
 
-  def edit_deployment_option_title(service)
-    title = deployment_option_is_service_mesh?(service) ? 'Service Mesh' : 'APIcast'
-    t(:edit_deployment_configuration, scope: :api_integrations_controller, deployment: title )
-  end
-
   def promote_to_staging_button_options(proxy)
     return disabled_promote_button_options if proxy.any_sandbox_configs? && !proxy.pending_affecting_changes?
 
-    label = deployment_option_is_service_mesh?(proxy.service) ? 'Update Configuration' : "Promote v. #{proxy.next_sandbox_config_version} to Staging"
+    label = deployment_option_is_service_mesh?(proxy.service) ? 'Update Configuration' : "Promote v. #{proxy.next_sandbox_config_version} to Staging APIcast"
     promote_button_options(label)
   end
 
   def promote_to_production_button_options(proxy)
     return disabled_promote_button_options if proxy.environments_have_same_config?
 
-    label = "Promote v. #{proxy.next_production_config_version} to Production"
+    label = "Promote v. #{proxy.next_production_config_version} to Production APIcast"
     promote_button_options(label)
   end
 
   PROMOTE_BUTTON_COMMON_OPTIONS = { button_html: { class: 'PromoteButton', data: { disable_with: 'promoting…' } } }.freeze
 
   def promote_button_options(label = 'Promote')
-    options = PROMOTE_BUTTON_COMMON_OPTIONS.deep_merge(button_html: { class: 'PromoteButton important-button' })
+    options = PROMOTE_BUTTON_COMMON_OPTIONS.deep_merge(button_html: { class: 'PromoteButton pf-c-button pf-m-primary' })
     [label, options]
   end
 
   def disabled_promote_button_options
-    options = PROMOTE_BUTTON_COMMON_OPTIONS.deep_merge(button_html: { class: 'PromoteButton disabled-button', disabled: true })
+    options = PROMOTE_BUTTON_COMMON_OPTIONS.deep_merge(button_html: { class: 'PromoteButton pf-c-button pf-m-primary', disabled: true })
     ['Nothing to promote', options]
+  end
+
+  def backend_routing_rule(backend_api_config)
+    path = StringUtils::StripSlash.strip_slash(backend_api_config.path.presence)
+    content_tag :code do
+      "/#{path} => #{backend_api_config.backend_api.private_endpoint}"
+    end
+  end
+
+  def proxy_rules_preview(owner, path: nil)
+    proxy_rules = owner.proxy_rules
+    last_rule = proxy_rules.last
+    return 'None' unless last_rule
+    code = content_tag(:code) { "#{proxy_rule_uri(path, last_rule)} => #{last_rule.metric.name}" }
+    code + link_to_more_proxy_rules(proxy_rules, proxy_rules_path_for(owner))
+  end
+
+  def proxy_rule_uri(path, rule)
+    File.join(path.to_s, rule.pattern.to_s)
+  end
+
+  protected
+
+  def link_to_more_proxy_rules(proxy_rules, url_to_more)
+    rules_size = proxy_rules.size
+    return '' if rules_size <= 1
+    link_to(" and #{rules_size - 1} more.", url_to_more)
   end
 end

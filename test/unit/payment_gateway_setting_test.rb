@@ -40,20 +40,10 @@ class PaymentGatewaySettingTest < ActiveSupport::TestCase
 
   test '#configured? failed if any gateway_settings missing for stripe' do
     @gateway_setting.gateway_type = :stripe
-    @gateway_setting.gateway_settings = {login: "Secret Key", publishable_key: ""}
+    @gateway_setting.gateway_settings = { login: 'Secret Key', publishable_key: '', endpoint_secret: 'some-secret' }
     refute @gateway_setting.configured?
 
     @gateway_setting.gateway_settings[:publishable_key] = 'PUBKEY'
-    assert @gateway_setting.configured?
-  end
-
-  test '#configured? failed if any gateway_settings missing for adyen12' do
-    @gateway_setting.gateway_type = :adyen12
-    @gateway_setting.gateway_settings = {login: 'Login', password: '', public_key: "Client Encryption Public Key",
-        merchantAccount: 'Merchant ID', encryption_js_url: "Library location"}
-    refute @gateway_setting.configured?
-
-    @gateway_setting.gateway_settings[:password] = 'password'
     assert @gateway_setting.configured?
   end
 
@@ -89,7 +79,7 @@ class PaymentGatewaySettingTest < ActiveSupport::TestCase
     gateway_setting.save(validate: false)
 
     gateway_setting.gateway_type = :stripe
-    gateway_setting.gateway_settings = { login: 'Secret Key', publishable_key: '' }
+    gateway_setting.gateway_settings = { login: 'Secret Key', publishable_key: '', endpoint_secret: 'some-secret' }
 
     assert gateway_setting.valid?
     refute gateway_setting.errors.added?(:gateway_type, :invalid)
@@ -107,5 +97,16 @@ class PaymentGatewaySettingTest < ActiveSupport::TestCase
 
     assert gateway_setting.valid?
     refute gateway_setting.errors.added?(:gateway_type, :invalid)
+  end
+
+  test 'with boolean fields' do
+    @gateway_setting.gateway_type = :braintree_blue
+    @gateway_setting.gateway_settings = { public_key: 'Public Key', merchant_id: 'Merchant ID', private_key: 'Private Key'}
+    assert @gateway_setting.configured?
+
+    refute @gateway_setting.gateway_settings[:three_ds_enabled], 'three_ds_enabled should be falsey'
+
+    @gateway_setting.gateway_settings = { public_key: 'Public Key', merchant_id: 'Merchant ID', private_key: 'Private Key', three_ds_enabled: true}
+    assert @gateway_setting.gateway_settings[:three_ds_enabled], 'three_ds_enabled should be truthy'
   end
 end

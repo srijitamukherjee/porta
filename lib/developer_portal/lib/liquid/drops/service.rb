@@ -83,7 +83,7 @@ module Liquid
       end
 
       def subscribe_url
-        cms_url_helpers.new_admin_service_contract_path(service_id: @service)
+        System::UrlHelpers.cms_url_helpers.new_admin_service_contract_path(service_id: @service)
       end
 
       desc "Returns the **published** application plans of the service."
@@ -191,12 +191,6 @@ module Liquid
       desc "Support email of the service."
       def support_email
         @service.support_email
-      end
-
-      # TODO: remove this and all references, views
-      hidden
-      def infobar
-        @service.infobar
       end
 
       desc 'Returns API spec collection.'

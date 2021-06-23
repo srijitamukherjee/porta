@@ -4,8 +4,7 @@ module BuyerDomainConstraint
   module_function
 
   def matches?(request)
-    request.extend(ThreeScale::DevDomain::Request) if ThreeScale::DevDomain.enabled?
-    Account.without_deleted.exists?(:domain => request.host) && !MasterDomainConstraint.matches?(request)
+    Account.without_deleted.exists?(:domain => request.internal_host) && !MasterDomainConstraint.matches?(request)
   end
 end
 
@@ -15,7 +14,7 @@ class DomainConstraint
   end
 
   def matches?(request)
-    request.host == @domain
+    request.internal_host == @domain
   end
 end
 
@@ -23,10 +22,8 @@ module ProviderDomainConstraint
   module_function
 
   def matches?(request)
-    request.extend(ThreeScale::DevDomain::Request) if ThreeScale::DevDomain.enabled?
-
     with_deleted = AuthenticatedSystem::Request.new(request).zync?
-    Account.without_deleted(!with_deleted).exists?(:self_domain => request.host)
+    Account.tenants.without_deleted(!with_deleted).exists?(self_domain: request.internal_host)
   end
 end
 
@@ -34,11 +31,11 @@ module MasterDomainConstraint
   module_function
 
   def matches?(request)
-    request.extend(ThreeScale::DevDomain::Request) if ThreeScale::DevDomain.enabled?
     return true if ThreeScale.master_on_premises?
 
     master = Account.master
-    master.admin_domain == request.host or master.domain == request.host
+    host = request.internal_host
+    master.match_internal_admin_domain?(host) or master.match_internal_domain?(host)
   end
 end
 
@@ -67,5 +64,15 @@ class ParameterConstraint
 
   def matches?(request)
     request.params.key?(name)
+  end
+end
+
+class PortConstraint
+  def initialize(port)
+    @port = port.to_s
+  end
+
+  def matches?(request)
+    request.port.to_s == @port
   end
 end

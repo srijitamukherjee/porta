@@ -1,7 +1,7 @@
 require 'test_helper'
 
 class DeveloperPortal::SignupTest < ActionDispatch::IntegrationTest
-  include DeveloperPortal::Engine.routes.url_helpers
+  include System::UrlHelpers.cms_url_helpers
   include UserDataHelpers
 
   def setup
@@ -60,7 +60,7 @@ class DeveloperPortal::SignupTest < ActionDispatch::IntegrationTest
 
     assert_response :success
 
-    get signup_path, plan_ids: []
+    get signup_path, params: {plan_ids: []}
 
     assert_response :success
 

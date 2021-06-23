@@ -136,10 +136,7 @@ class ProxyRuleTest < ActiveSupport::TestCase
   test 'save' do
     proxy_rule = FactoryBot.build(:proxy_rule, redirect_url: nil)
     # should accept string up to 10000 characters
-    proxy_rule.redirect_url = "https://example.com/#{'1' * 9980}"
-    assert_valid proxy_rule
-
-    proxy_rule.save!
+    assert FactoryBot.create(:proxy_rule, redirect_url: "https://example.com/#{'1' * 9980}")
   end
 
   test 'fill owner' do
@@ -157,31 +154,108 @@ class ProxyRuleTest < ActiveSupport::TestCase
     assert backend_proxy_rule.valid?
   end
 
-  class ProxyConfigAffectingChangesTest < ActiveSupport::TestCase
+  class PositionUpdateOnConcurrentDeletion < ActiveSupport::TestCase
     disable_transactional_fixtures!
 
-    test 'proxy config affecting changes of object owned by proxy' do
-      proxy = FactoryBot.create(:proxy)
-      proxy_rule = FactoryBot.build(:proxy_rule, owner: proxy, pattern: '/some-pattern')
-
-      ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(proxy, proxy_rule).times(3)
-
-      proxy_rule.save!
-      proxy_rule.update_attributes(pattern: '/new-pattern')
-      proxy_rule.destroy!
+    setup do
+      @provider = FactoryBot.create(:simple_provider)
     end
 
-    test 'proxy config affecting changes of object owned by backend_api' do
-      backend_api = FactoryBot.create(:backend_api)
-      products = FactoryBot.create_list(:simple_service, 2)
-      proxy_rule = FactoryBot.build(:proxy_rule, owner: backend_api, pattern: '/some-pattern')
-      products.each { |product| product.backend_api_configs.create(backend_api: backend_api, path: '/') }
+    attr_reader :provider
 
-      products.each { |product| ProxyConfigs::AffectingObjectChangedEvent.expects(:create_and_publish!).with(product.proxy, proxy_rule).times(3) }
+    test 'position is not updated when account has been deleted' do
+      proxy = FactoryBot.create(:service, account: provider).proxy
+      proxy_rule = FactoryBot.create(:proxy_rule, proxy: proxy)
 
-      proxy_rule.save!
-      proxy_rule.update_attributes(pattern: '/new-pattern')
-      proxy_rule.destroy!
+      provider.delete
+
+      proxy_rule.expects(:decrement_positions_on_lower_items).never
+      proxy_rule.reload.destroy
+    end
+
+    test 'position is not updated when owner proxy has been deleted' do
+      proxy = FactoryBot.create(:service, account: provider).proxy
+      proxy_rule = FactoryBot.create(:proxy_rule, proxy: proxy)
+
+      proxy.delete
+
+      proxy_rule.expects(:decrement_positions_on_lower_items).never
+      proxy_rule.reload.destroy
+    end
+
+    test 'position is not updated when owner backend has been deleted' do
+      backend_api = FactoryBot.create(:backend_api, account: provider)
+      proxy_rule = FactoryBot.create(:proxy_rule, owner: backend_api, proxy: nil)
+
+      backend_api.mark_as_deleted
+
+      proxy_rule.expects(:decrement_positions_on_lower_items).never
+      proxy_rule.reload.destroy
+    end
+  end
+
+  module ProxyConfigAffectingChangesTest
+    class ProxyOwned < ActiveSupport::TestCase
+      disable_transactional_fixtures!
+
+      setup do
+        @proxy = FactoryBot.create(:simple_proxy)
+      end
+
+      attr_reader :proxy
+
+      include ProxyConfigAffectingChangesTest
+
+      def create_proxy_rule
+        FactoryBot.create(:proxy_rule, proxy: proxy)
+      end
+    end
+
+    class BackendApiOwned < ActiveSupport::TestCase
+      disable_transactional_fixtures!
+
+      setup do
+        service = FactoryBot.create(:simple_service)
+        @backend_api = FactoryBot.create(:backend_api, account: service.account)
+        FactoryBot.create(:backend_api_config, backend_api: backend_api, service: service)
+      end
+
+      attr_reader :backend_api
+
+      include ProxyConfigAffectingChangesTest
+
+      def create_proxy_rule
+        FactoryBot.create(:proxy_rule, owner: backend_api, proxy: nil)
+      end
+    end
+
+    def test_tracks_changes_on_create
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        proxy_rule = create_proxy_rule
+        assert tracker.tracking?(ProxyConfigAffectingChanges::TrackedObject.new(proxy_rule))
+      end
+    end
+
+    def tracks_changes_on_update
+      proxy_rule = create_proxy_rule
+      tracked_object = ProxyConfigAffectingChanges::TrackedObject.new(proxy_rule)
+
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        refute tracker.tracking?(tracked_object)
+        proxy_rule.update(pattern: '/new-pattern')
+        assert tracker.tracking?(tracked_object)
+      end
+    end
+
+    def tracks_changes_on_destroy
+      proxy_rule = create_proxy_rule
+      tracked_object = ProxyConfigAffectingChanges::TrackedObject.new(proxy_rule)
+
+      with_proxy_config_affecting_changes_tracker do |tracker|
+        refute tracker.tracking?(tracked_object)
+        proxy_rule.destroy
+        assert tracker.tracking?(tracked_object)
+      end
     end
   end
 end

@@ -76,10 +76,10 @@ class AccountTest < ActiveSupport::TestCase
   def test_provider_but_not_master
     account = FactoryBot.build_stubbed(:simple_account, provider: false, master: false)
     refute account.tenant?
-    
+
     account.provider = true
     assert account.tenant?
-    
+
     account.master = true
     refute account.tenant?
   end
@@ -97,21 +97,6 @@ class AccountTest < ActiveSupport::TestCase
 
     assert_raise(ActiveRecord::RecordNotFound) { service.reload }
     assert_raise(ActiveRecord::RecordNotFound) { metric.reload }
-  end
-
-  def test_default_service_id
-    service = FactoryBot.create(:simple_service)
-    account = FactoryBot.create(:simple_account, services: [service], default_service_id: service.id)
-
-    assert service.default?
-    assert_equal service.id, account.default_service_id
-
-    service.destroy_default
-
-    account.reload
-
-    assert_raises(ActiveRecord::RecordNotFound) { service.reload }
-    assert_nil account.default_service_id
   end
 
   test '#trashed_messages' do
@@ -444,17 +429,17 @@ class AccountTest < ActiveSupport::TestCase
     assert_nil account.site_access_code
   end
 
-  test 'Account.find_by_provider_key! raises an exception if the key is invalid' do
+  test 'Account.first_by_provider_key! raises an exception if the key is invalid' do
     assert_raise Backend::ProviderKeyInvalid do
-      Account.find_by_provider_key!('boo')
+      Account.first_by_provider_key!('boo')
     end
   end
 
-  test "Account.find_by_provider_key! finds account by bought cinstance's user_key" do
+  test "Account.first_by_provider_key! finds account by bought cinstance's user_key" do
     account = FactoryBot.create(:simple_account, provider_account: master_account)
     cinstance = account.buy!(master_account.default_service.published_plans.first)
 
-    assert_equal account, Account.find_by_provider_key!(cinstance.user_key)
+    assert_equal account, Account.first_by_provider_key!(cinstance.user_key)
   end
 
   test 'Account.master raises and exception if there is no master account' do
@@ -750,64 +735,27 @@ class AccountTest < ActiveSupport::TestCase
     assert_equal provider.finance_support_email, "finance-support@acc.example.net"
   end
 
-  #
   # regression test for https://github.com/3scale/system/issues/2767
   test 'destroy should destroy all cinstances and application_plans' do
-    service = master_account.default_service
-    master_account.account_plans.default!(master_account.account_plans.first)
-    service.update_attribute(:default_service_plan, master_account.service_plans.first)
+    master_plan = master_account.default_application_plans.first!
 
-    master_account.signup_provider(master_account.application_plans.first) do |provider, user|
-      @provider, @user = provider, user
-      provider.subdomain = "foo"
-      provider.org_name = "bar"
-      provider.sample_data = false
-      user.password = user.password_confirmation = "foobar"
-      user.email = "foo@example.com"
-    end
+    provider = FactoryBot.create(:simple_provider, provider_account: master_account)
+    cinstance_tenant = FactoryBot.create(:cinstance, plan: master_plan, user_account: provider)
 
-    @user.activate
-    @provider.create_sample_data!
+    service = FactoryBot.create(:simple_service, account: provider)
+    buyer = FactoryBot.create(:simple_buyer, provider_account: provider)
+    tenant_plan = FactoryBot.create(:application_plan, issuer: service)
+    cinstance_buyer = FactoryBot.create(:cinstance, plan: tenant_plan, user_account: buyer)
 
-    cis = @provider.default_service.cinstances.map(&:id)
-    aps = @provider.default_service.application_plans.map(&:id)
+    assert_not_equal 0, provider.provided_cinstances.reload.count
+    assert_not_equal 0, provider.provided_plans.reload.count
+    assert_not_equal 0, provider.bought_plans.reload.count
 
-    @provider.expects(:destroy_all_contracts)
+    provider.destroy!
 
-    @provider.destroy
-    assert_equal 0, Cinstance.where(id: cis).count
-    assert_equal 0, ApplicationPlan.where(id: aps).count
-  end
-
-  test '#signup provider with api_as_product' do
-    master_account.account_plans.default!(master_account.account_plans.first)
-    master_account.signup_provider(master_account.application_plans.first) do |provider, user|
-      provider.stubs(:provider_can_use?).returns(false)
-      provider.expects(:provider_can_use?).with(:api_as_product).returns(true).at_least_once
-      @provider, @user = provider, user
-      provider.subdomain = "foo"
-      provider.org_name = "bar"
-      provider.sample_data = false
-      user.password = user.password_confirmation = "foobar"
-      user.email = "foo@example.com"
-    end
-    assert_nil @provider.first_service.api_backend
-  end
-
-
-  test '#signup provider without api_as_product' do
-    master_account.account_plans.default!(master_account.account_plans.first)
-    master_account.signup_provider(master_account.application_plans.first) do |provider, user|
-      @provider, @user = provider, user
-      provider.stubs(:provider_can_use?).returns(false)
-      provider.expects(:provider_can_use?).with(:api_as_product).returns(false).at_least_once
-      provider.subdomain = "foo"
-      provider.org_name = "bar"
-      provider.sample_data = false
-      user.password = user.password_confirmation = "foobar"
-      user.email = "foo@example.com"
-    end
-    assert_equal BackendApi.default_api_backend, @provider.first_service.api_backend
+    assert_equal 0, provider.provided_cinstances.reload.count
+    assert_equal 0, provider.provided_plans.reload.count
+    assert_equal 0, provider.bought_plans.reload.count
   end
 
   test 'onboarding builds object if not already created' do
@@ -822,16 +770,23 @@ class AccountTest < ActiveSupport::TestCase
     # just to make the serialization work
     def account.fields_definitions_source_root!; self; end
 
-    account.domain = 'some.example.com'
-    account.self_domain = 'admin.#{ThreeScale.config.superdomain}'
+    domain = 'some.example.com'
+    admin_domain = 'admin.#{ThreeScale.config.superdomain}'
 
-    domain_xml = '<domain>some.example.com</domain>'
-    admin_domain_xml = '<admin_domain>admin.#{ThreeScale.config.superdomain}</admin_domain>'
+    account.domain = domain
+    account.self_domain = admin_domain
+
+    domain_xml = "<domain>#{domain}</domain>"
+    admin_domain_xml = "<admin_domain>#{admin_domain}</admin_domain>"
+    base_url_xml = "<base_url>http://#{domain}</base_url>"
+    admin_base_url_xml = "<admin_base_url>http://#{admin_domain}</admin_base_url>"
 
     xml = account.to_xml
 
     refute_match domain_xml, xml
     refute_match admin_domain_xml, xml
+    refute_match base_url_xml, xml
+    refute_match admin_base_url_xml, xml
 
     account.provider = true
 
@@ -839,6 +794,8 @@ class AccountTest < ActiveSupport::TestCase
 
     assert_match domain_xml, xml
     assert_match admin_domain_xml, xml
+    assert_match base_url_xml, xml
+    assert_match admin_base_url_xml, xml
   end
 
   test 'settings' do
@@ -848,6 +805,10 @@ class AccountTest < ActiveSupport::TestCase
     assert_equal account, settings.account
     # they are actually the same object
     assert_equal account.object_id, settings.account.object_id
+  end
+
+  test 'multiple_applications_allowed? does not crash when the account does not have settings (already deleted)' do
+    refute Account.new.multiple_applications_allowed?
   end
 
   test 'fetch_dispatch_rule' do

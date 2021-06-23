@@ -82,18 +82,14 @@ When /^I follow "([^"]*)" within usage limits panel for (metric "[^"]*" on appli
   step %(I follow "#{label}" within "##{dom_id(metric)}_slot")
 end
 
-def metrics
+def metrics_container
   find(:css, '#metrics')
-end
-
-def plans
-  find(:css, '#plans')
 end
 
 And(/^limits hits of that plan to (\d+)$/) do |number|
   visit_edit_plan(@plan)
 
-  within metrics do
+  within metrics_container do
     click_on 'Edit limits of Hits'
     click_on 'New usage limit'
   end
@@ -117,8 +113,8 @@ def visit_edit_plan(plan)
 
   step 'I go to the application plans admin page'
 
-  within plans do
-    click_on "Edit Application plan '#{plan.name}'"
+  within plans_table do
+    click_on plan.name
   end
 
   page.should have_css 'h1', text: "Application Plan #{plan.name}"

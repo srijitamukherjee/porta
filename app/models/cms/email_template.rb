@@ -1,19 +1,21 @@
+# frozen_string_literal: true
+
 class CMS::EmailTemplate < CMS::Template
 
   attr_accessible :system_name, :draft, :published, :headers # do not do drafts
 
   validates :system_name, presence: true
   validates :current, presence: true
-  validates :system_name, uniqueness: { :scope => [:provider_id], :allow_blank => true }
+  validates :system_name, uniqueness: { scope: %i[provider_id], allow_blank: true }
   validate :headers_formats
 
   class_attribute :templates_path
 
   def self.reset_templates_path!
-    self.templates_path = Rails.root.join(*%w{app views emails})
+    self.templates_path = Rails.root.join('app', 'views', 'emails')
   end
 
-  BUYER_BILLING_TEMPLATES = %w(
+  BUYER_BILLING_TEMPLATES = %w[
     account_messenger_expired_credit_card_notification_for_buyer
     invoice_messenger_upcoming_charge_notification
     invoice_messenger_successfully_charged
@@ -21,9 +23,9 @@ class CMS::EmailTemplate < CMS::Template
     invoice_messenger_unsuccessfully_charged_for_buyer_final
     cinstance_messenger_expired_trial_period_notification
     service_contract_messenger_expired_trial_period_notification
-  ).freeze
+  ].freeze
 
-  PROVIDER_TEMPLATES = %w(
+  PROVIDER_TEMPLATES = %w[
     account_messenger_expired_credit_card_notification_for_provider
     alert_messenger_limit_alert_for_provider
     alert_messenger_limit_violation_for_provider
@@ -39,7 +41,7 @@ class CMS::EmailTemplate < CMS::Template
     service_contract_messenger_new_contract
     service_contract_messenger_plan_change
     data_export
-  ).freeze
+  ].freeze
 
   reset_templates_path!
 
@@ -48,17 +50,35 @@ class CMS::EmailTemplate < CMS::Template
   EMAIL_FORMAT = /(?:(#{EMAIL_ADDRESS_FORMAT})|#{EMAIL_WITH_NAME_FORMAT})\s*/i
   EMAILS_FORMAT = /\A#{EMAIL_FORMAT}(,\s*#{EMAIL_FORMAT})*\Z/i
 
-  serialize :options, Hash
+  class HashOrParameters < ::ActiveRecord::Coders::YAMLColumn
+    def load(string)
+      obj = super(string)
+      obj.respond_to?(:to_unsafe_h) ? obj.to_unsafe_h : obj.to_h if obj
+    end
+
+    def dump(object)
+      return object if object.is_a?(String) && assert_valid_value(load(object))
+      obj = object.respond_to?(:to_unsafe_h) ? object.to_unsafe_h : object.to_h if object
+      super(obj)
+    end
+
+    def assert_valid_value(obj)
+      obj.is_a?(Hash) || obj.is_a?(ActionController::Parameters) || super
+    end
+  end
+
+  # TODO: On Rails 5.1+, change in argument contructor ::ActiveRecord::Coders::YAMLColumn.new(attr_name, class_or_coder)
+  serialize :options, HashOrParameters.new(Hash)
 
   attr_accessor :file
 
   def name
     default = system_name ? system_name.humanize : '(no name)'
-    I18n.translate(system_name, scope: [:cms, :email_template], default: default)
+    I18n.translate(system_name, scope: %i[cms email_template], default: default)
   end
 
   def description
-    I18n.translate(system_name, scope: [:cms, :email_template_description], default: "No description.")
+    I18n.translate(system_name, scope: %i[cms email_template_description], default: 'No description.')
   end
 
   def headers
@@ -78,9 +98,9 @@ class CMS::EmailTemplate < CMS::Template
     super or Mime['text/plain']
   end
 
-  def headers= val
+  def headers=(val)
     @headers = nil
-    self[:options] = val
+    self[:options] = val.respond_to?(:to_unsafe_h) ? val.to_unsafe_h : val
   end
 
   def reload(*)
@@ -89,7 +109,7 @@ class CMS::EmailTemplate < CMS::Template
   end
 
   def published
-    super or file.try!(:read)
+    super or file&.read
   end
 
   def save(*)
@@ -118,18 +138,15 @@ class CMS::EmailTemplate < CMS::Template
         # user passed email, validate its domain
         domain = provider.from_email.split('@').last
 
-        unless email.join.split('@').last == domain
-          errors.add(field, :wrong_domain)
-        end
+        errors.add(field, :wrong_domain) unless email.join.split('@').last == domain
       end
     end
   end
 
-
   # This is for assert_invalid method, it pretty prints invalid attributes
   def method_missing(method, *args)
     if method.to_s =~ /\Aheaders\.(.+)$/
-      headers.send($1, *args)
+      headers.send(Regexp.last_match(1), *args)
     else
       super
     end
@@ -150,7 +167,7 @@ class CMS::EmailTemplate < CMS::Template
     end
 
     def default_system_names
-      @default_system_names ||= Pathname.glob(templates_path.join("*.liquid")).map{ |file| file.basename('.text.liquid').to_s }.sort
+      @default_system_names ||= Pathname.glob(templates_path.join("*.liquid")).map { |file| file.basename('.text.liquid').to_s }.sort
     end
   end
 
@@ -167,36 +184,36 @@ class CMS::EmailTemplate < CMS::Template
 
     def to_yaml
       # do not store empty values
-      @table.reject{|k,v| v.blank?}
+      @table.reject {|k,v| v.blank?}
     end
 
     def from_email(base_email)
-      return unless from.present?
+      return if from.blank?
 
       if from =~ /\A#{CMS::EmailTemplate::EMAIL_FORMAT}\Z/
         from
       else
-        %{"#{from}" <#{base_email}>}
+        %("#{from}" <#{base_email}>)
       end
     end
 
     def to_email_headers(base_email)
       from = from_email(base_email)
-      hash = to_hash.symbolize_keys.reject{ |k,v| v.blank? }
+      hash = to_hash.symbolize_keys.reject { |k,v| v.blank? }
       hash[:from] = from if from
       hash
     end
 
     private
     def modifiable
-      @block.call(self.to_hash) if @block
+      @block&.call(to_hash)
       super
     end
   end
 
   module ExtensionCore
     def template_headers(template)
-      return if (not template.respond_to?(:headers)) || (not template.headers)
+      return if !template.respond_to?(:headers) || !template.headers
 
       template.headers.to_email_headers(template.provider.from_email)
     end
@@ -208,8 +225,29 @@ class CMS::EmailTemplate < CMS::Template
     extend ActiveSupport::Concern
 
     included do
-      alias_method_chain :render, :liquid
-      alias_method_chain :mail, :liquid
+      prepend(Module.new do
+                protected
+
+                def mail(headers, &block)
+                  if @provider_account
+                    headers[:template_path] ||= 'emails'
+                    prepend_view_path Liquid::Template::Resolver.instance(@provider_account)
+
+                    headers[::Message::APPLY_ENGAGEMENT_FOOTER]= @provider_account.should_apply_email_engagement_footer?
+                  else
+                    Rails.logger.warn { "#{caller[2]} does not have provider_account set, falling back to filesytem templates" }
+                  end
+
+                  super(headers, &block)
+                end
+
+                def render(options)
+                  template = options.fetch(:template)
+                  apply_headers!(template.record) if template.respond_to?(:record)
+                  super(options)
+                end
+      end)
+
       attr_reader :provider_account
       alias_method :provider, :provider_account
 
@@ -222,6 +260,7 @@ class CMS::EmailTemplate < CMS::Template
 
     def provider_account=(provider_account)
       raise DoubleAssignError if @provider_account
+
       @provider_account = provider_account
     end
 
@@ -231,27 +270,6 @@ class CMS::EmailTemplate < CMS::Template
       headers.each do |key, value|
         @_message[key] = value
       end
-    end
-
-    def mail_with_liquid(headers, &block)
-      if @provider_account
-        headers[:template_path] ||= 'emails'
-        prepend_view_path Liquid::Template::Resolver.instance(@provider_account)
-
-        headers[::Message::APPLY_ENGAGEMENT_FOOTER]= @provider_account.should_apply_email_engagement_footer?
-      else
-        Rails.logger.warn { "#{caller[2]} does not have provider_account set, falling back to filesytem templates" }
-      end
-
-      mail_without_liquid(headers, &block)
-    end
-
-    def render_with_liquid(options)
-      template = options.fetch(:template)
-      if template.respond_to?(:record)
-        apply_headers!(template.record)
-      end
-      render_without_liquid(options)
     end
 
     def prepare_liquid_template(template)
@@ -287,9 +305,9 @@ class CMS::EmailTemplate < CMS::Template
   module ProviderAssociationExtension
     def all_new_and_overridden
       system_names = default_system_names
-      provider = try(:proxy_association).try!(:owner)
+      provider = try(:proxy_association)&.owner
 
-      if provider && provider.provider_can_use?(:new_notification_system)
+      if provider&.provider_can_use?(:new_notification_system)
         system_names -= PROVIDER_TEMPLATES
         system_names -= BUYER_BILLING_TEMPLATES if provider.master_on_premises?
       end
@@ -302,7 +320,7 @@ class CMS::EmailTemplate < CMS::Template
     end
 
     def find_by_name(name)
-      find_by_system_name(name) or find_default_by_name(name)
+      find_by(system_name: name) or find_default_by_name(name)
     end
 
     def find_default_by_name(name)
@@ -314,7 +332,7 @@ class CMS::EmailTemplate < CMS::Template
 
     def find_file_template(name)
       root = CMS::EmailTemplate.templates_path
-      files = [ root.join(name + '.text.liquid'), root.join(name + '.liquid') ]
+      files = [root.join(name + '.text.liquid'), root.join(name + '.liquid')]
 
       files.each do |file|
         return file.read if file.exist?

@@ -2,7 +2,7 @@
 
 class ServiceCreator
 
-  delegate :backend_api_configs, :backend_api_proxy, :account, to: :@service
+  delegate :backend_api_configs, :backend_api_proxy, :account, :proxy, to: :@service
   delegate :provider_can_use?, to: :account
 
   def initialize(service:, backend_api: nil)
@@ -12,8 +12,8 @@ class ServiceCreator
 
   def call!(params = {})
     @service.transaction do
-      backend_api_proxy_params = params.dup
-      service_params = backend_api_proxy_params.slice!(:path, :private_endpoint)
+      service_params = params.dup
+      backend_api_proxy_params = service_params.extract!(:path, :private_endpoint)
       @service.attributes = service_params
       save!(backend_api_proxy_params)
     end
@@ -37,12 +37,8 @@ class ServiceCreator
   end
 
   def save_default_backend_api(params)
-    if provider_can_use?(:api_as_product)
-      return true if %i[path private_endpoint].none? { |key| params.key?(key) }
-      backend_api_proxy.update!(params)
-    else
-      backend_api_proxy.update!(private_endpoint: BackendApi.default_api_backend)
-    end
+    return true if %i[path private_endpoint].none? { |key| params.key?(key) }
+    backend_api_proxy.update!(params)
   end
 
   def save_assigned_backend_api(attrs)

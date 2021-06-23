@@ -1,14 +1,12 @@
-require File.expand_path('../boot', __FILE__)
+# frozen_string_literal: true
+require_relative 'boot'
 
 require 'rails/all'
-# If you have a Gemfile, require the gems listed there, including any gems
-# you've limited to :test, :development, or :production.
-if defined?(Bundler)
-  # If you precompile assets before deploying to production, use this line
-  Bundler.require *Rails.groups(:assets => %w(development production preview test))
-  # If you want your assets lazily compiled in production, use this line
-  # Bundler.require(:default, :assets, Rails.env)
-end
+
+# If you precompile assets before deploying to production, use this line
+Bundler.require *Rails.groups(:assets => %w(development production preview test))
+# If you want your assets lazily compiled in production, use this line
+# Bundler.require(:default, :assets, Rails.env)
 
 ActiveSupport::XmlMini.backend = 'Nokogiri'
 
@@ -62,9 +60,6 @@ module System
       config.logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new(STDOUT))
     end
 
-    # Disables Yarn check
-    config.webpacker.check_yarn_integrity = false
-
     config.active_record.whitelist_attributes = false
 
     config.boot_time = Time.now
@@ -73,14 +68,16 @@ module System
     # Application configuration should go into files in config/initializers
     # -- all .rb files in that directory are automatically loaded.
 
-    # Custom directories with classes and modules you want to be autoloadable.
-    config.autoload_paths += %W(#{config.root.join('lib')})
+    # Include developer_portal into the autoload and eager load path
+    config.autoload_paths += [Rails.root.join('lib', 'developer_portal', 'app'), Rails.root.join('lib', 'developer_portal', 'lib')]
+    config.eager_load_paths += [Rails.root.join('lib', 'developer_portal', 'app'), Rails.root.join('lib', 'developer_portal', 'lib')]
+
+    config.eager_load = true
+    config.enable_dependency_loading = false
 
     # Only load the plugins named here, in the order given (default is alphabetical).
     # :all can be used as a placeholder for all plugins not explicitly named.
     # config.plugins = [ :exception_notification, :ssl_requirement, :all ]
-
-    config.active_record.raise_in_transactional_callbacks = true
 
     # Activate observers that should always be running.
     config.active_record.observers = :account_observer,
@@ -133,7 +130,7 @@ module System
     config.assets.version = '1437647386' # unix timestamp
 
 
-    config.serve_static_files = false
+    config.public_file_server.enabled = false
 
     # We don't want Rack::Cache to be used
     config.action_dispatch.rack_cache = false
@@ -173,10 +170,6 @@ module System
     config.three_scale.segment = ActiveSupport::OrderedOptions.new
     config.three_scale.segment.merge!(config_for(:segment).symbolize_keys)
 
-    config.three_scale.google_experiments = ActiveSupport::OrderedOptions.new
-    config.three_scale.google_experiments.enabled = false
-    config.three_scale.google_experiments.merge!(config_for(:google_experiments).symbolize_keys)
-
     config.three_scale.redhat_customer_portal = ActiveSupport::OrderedOptions.new
     config.three_scale.redhat_customer_portal.enabled = false
     config.three_scale.redhat_customer_portal.merge!(try_config_for(:redhat_customer_portal) || {})
@@ -193,14 +186,17 @@ module System
     config.three_scale.plan_rules = ActiveSupport::OrderedOptions.new
     config.three_scale.plan_rules.merge!(try_config_for(:plan_rules) || {})
 
+    config.three_scale.currencies = ActiveSupport::OrderedOptions.new
+    config.three_scale.currencies.merge!(try_config_for(:currencies) || {})
+
     config.three_scale.features = ActiveSupport::OrderedOptions.new
     config.three_scale.features.merge!(try_config_for(:features) || {})
 
-    config.three_scale.prometheus = ActiveSupport::OrderedOptions.new
-    config.three_scale.prometheus.merge!(try_config_for(:prometheus) || {})
-
     config.three_scale.message_bus = ActiveSupport::OrderedOptions.new
     config.three_scale.message_bus.merge!(try_config_for(:message_bus) || {})
+
+    config.domain_substitution = ActiveSupport::OrderedOptions.new
+    config.domain_substitution.merge!(try_config_for(:domain_substitution) || {})
 
     three_scale = config_for(:settings).symbolize_keys
     three_scale[:error_reporting_stages] = three_scale[:error_reporting_stages].to_s.split(/\W+/)
@@ -220,17 +216,11 @@ module System
 
     config.cms_files_path = ':url_root/:date_partition/:basename-:random_secret.:extension'
 
-    # Configure sensitive parameters which will be filtered from the log file.
-    config.filter_parameters += %i[activation_code cms_token credit_card credit_card_auth_code
-                                   credit_card_authorize_net_payment_profile_token credit_card_expires_on
-                                   credit_card_partial_number crypted_password janrain_api_key lost_password_token
-                                   password password_digest payment_gateway_options payment_service_reference salt
-                                   site_access_code sso_key user_key]
-
+    require 'three_scale/deprecation'
+    require 'three_scale/domain_substitution'
     require 'three_scale/middleware/multitenant'
-    require 'three_scale/middleware/dev_domain'
+
     config.middleware.use ThreeScale::Middleware::Multitenant, :tenant_id
-    config.middleware.use ThreeScale::Middleware::DevDomain, config.three_scale.dev_domain_regexp, config.three_scale.dev_domain_replacement if config.three_scale.dev_domain
     config.middleware.insert_before Rack::Runtime, Rack::UTF8Sanitizer
     config.middleware.insert_before Rack::Runtime, Rack::XServedBy # we can pass hashed hostname as parameter
 
@@ -252,22 +242,35 @@ module System
     end
 
     config.paperclip_defaults = {
-        storage: :s3,
-        s3_credentials: ->(*) { CMS::S3.credentials },
-        bucket: ->(*) { CMS::S3.bucket },
-        s3_protocol: 'https'.freeze,
-        s3_permissions: 'private'.freeze,
-        s3_region: ->(*) { CMS::S3.region },
-        url: ':storage_root/:class/:id/:attachment/:style/:basename.:extension'.freeze,
-        path: ':rails_root/public/system/:url'.freeze
+      storage: :s3,
+      s3_credentials: ->(*) { CMS::S3.credentials },
+      bucket: ->(*) { CMS::S3.bucket },
+      s3_protocol: ->(*) { CMS::S3.protocol },
+      s3_permissions: 'private'.freeze,
+      s3_region: ->(*) { CMS::S3.region },
+      s3_host_name: ->(*) { CMS::S3.hostname },
+      url: ':storage_root/:class/:id/:attachment/:style/:basename.:extension'.freeze,
+      path: ':rails_root/public/system/:url'.freeze
     }.merge(try_config_for(:paperclip) || {})
 
+    initializer :paperclip_defaults, after: :load_config_initializers do
+      Paperclip::Attachment.default_options.merge!(s3_options: CMS::S3.options) # Paperclip does not accept s3_options set as a Proc
+    end
+
+    config.before_initialize do
+      require 'three_scale'
+    end
+
     config.after_initialize do
-      require_or_load 'three_scale'
       ThreeScale.validate_settings!
       require 'system/redis_pool'
       redis_config = ThreeScale::RedisConfig.new(config.redis)
       System.redis = System::RedisPool.new(redis_config.config)
+
+      # Prevents concurrent threads (e.g. sidekiq, puma) to deadlock while racing to obtain access to the mutex block at https://github.com/pat/thinking-sphinx/blob/v3.4.2/lib/thinking_sphinx/configuration.rb#L78
+      # This is a ThinkingSphinx's known bug, fixed in v4.3.0+ - see: https://github.com/pat/thinking-sphinx/commit/814beb0aa3d9dd1227c0f41d630888a738f7c0d6
+      # See also https://github.com/pat/thinking-sphinx/issues/1051 and https://github.com/pat/thinking-sphinx/issues/1132
+      ThinkingSphinx::Configuration.instance.preload_indices if ActiveRecord::Base.connected?
     end
 
     config.assets.quiet = true

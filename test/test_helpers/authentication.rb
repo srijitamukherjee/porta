@@ -55,12 +55,27 @@ ActionDispatch::IntegrationTest.class_eval do
   end
 
   def provider_login_with(username, password)
-    get_via_redirect  '/p/login'
-    post_via_redirect provider_sessions_path, :username => username, :password => password
+    get '/p/login'
+    follow_redirect! while redirect?
+    post provider_sessions_path, params: {username: username, password: password}
+    follow_redirect! while redirect?
   end
 
   def login_with(username, password)
-    get_via_redirect  '/login'
-    post_via_redirect '/session', :username => username, :password => password
+    get '/login'
+    follow_redirect! while redirect?
+    post '/session', params: {username: username, password: password}
+    follow_redirect! while redirect?
+  end
+
+  def logout!
+    get '/p/logout'
+  end
+
+  def with_forgery_protection(enabled: true)
+    ActionController::Base.any_instance.stubs(allow_forgery_protection: enabled)
+    yield
+  ensure
+    ActionController::Base.any_instance.stubs(allow_forgery_protection: false)
   end
 end

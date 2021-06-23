@@ -67,6 +67,14 @@ class Admin::Api::ServicesControllerTest < ActionDispatch::IntegrationTest
 
     attr_reader :provider, :service
 
+    test 'index can be paginated' do
+      FactoryBot.create_list(:simple_service, 5, account: provider)
+      get admin_api_services_path(access_token: access_token_value, format: :json, per_page: 3, page: 2)
+      assert_response :success
+      response_service_ids = JSON.parse(response.body)['services'].map { |response_service| response_service.dig('service', 'id') }
+      assert_equal provider.accessible_services.order(:id).offset(3).limit(3).select(:id).map(&:id), response_service_ids
+    end
+
     test 'delete with api_key' do
       assert_change(of: -> { service.reload.deleted? }, from: false, to: true) do
         delete admin_api_service_path(service, provider_key: provider.api_key)
@@ -82,12 +90,46 @@ class Admin::Api::ServicesControllerTest < ActionDispatch::IntegrationTest
       assert_correct_params
     end
 
+    test 'create with provider' do
+      assert_difference(provider_services.method(:count)) do
+        post admin_api_services_path(provider_key: @provider.provider_key, format: :json), permitted_params
+        assert_response :created
+      end
+      assert_correct_params
+    end
+
+    test 'create with unauthorize provider key' do
+      Account.any_instance.stubs(can_create_service?: false)
+      assert_no_difference(provider_services.method(:count)) do
+        post admin_api_services_path(provider_key: @provider.provider_key, format: :json), permitted_params
+        assert_response :forbidden
+      end
+    end
+
+    test 'create with unauthorize admin user' do
+      Account.any_instance.stubs(can_create_service?: false)
+      assert_no_difference(provider_services.method(:count)) do
+        post admin_api_services_path(access_token: access_token_value, format: :json), permitted_params
+        assert_response :forbidden
+      end
+    end
+
     test 'create with errors in the model' do
       assert_no_difference(provider_services.method(:count)) do
         post admin_api_services_path(access_token: access_token_value, format: :json), permitted_params.merge({backend_version: 'fake'})
         assert_response :unprocessable_entity
       end
       assert_contains JSON.parse(response.body).dig('errors', 'backend_version'), 'is not included in the list'
+    end
+
+    test 'a member user cannot create a service' do
+      member = FactoryBot.create(:member, account: provider)
+      member_access_token_value = FactoryBot.create(:access_token, owner: member, scopes: %w[account_management], permission: 'rw').value
+
+      assert_no_difference(provider_services.method(:count)) do
+        post admin_api_services_path(access_token: member_access_token_value, format: :json), permitted_params
+        assert_response :forbidden
+      end
     end
 
     test 'update' do
@@ -191,19 +233,8 @@ class Admin::Api::ServicesControllerTest < ActionDispatch::IntegrationTest
         kubernetes_service_link: '/api/v1/namespaces/example-project/services/example-api',
         account_id: provider.id + 1,
         tenant_id:  provider.id + 1,
-        oneline_description: 'one line description',
-        txt_api: 'text for txt api',
-        txt_features: 'text for txt features',
-        draft_name: 'example of draft name',
-        infobar: 'infobar text',
-        tech_support_email: 'email@example.com',
-        admin_support_email: 'email@example.com',
-        credit_card_support_email: 'email@example.com',
-        default_end_user_plan_id: -1,
         default_application_plan_id: -1,
         default_service_plan_id: -1,
-        end_user_registration_required: false,
-        display_provider_keys: true,
         logo_file_name: 'example',
         logo_content_type: 'png',
         logo_file_size: 1

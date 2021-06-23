@@ -1,10 +1,7 @@
-require 'three_scale/error_reporting_ignore_enduser'
+# frozen_string_literal: true
 
 module DeveloperPortal
   class ApplicationController < ::FrontendController
-
-    include ::ThreeScale::ErrorReportingIgnoreEnduser
-    error_reporting_ignore_enduser
 
     before_action :disable_for_suspended_provider_account
 

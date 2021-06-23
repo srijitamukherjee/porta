@@ -1,7 +1,6 @@
 require 'test_helper'
 
 class ApplicationKeysTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
 
   subject { @application_key ||= FactoryBot.create(:application_key) }
 
@@ -13,6 +12,18 @@ class ApplicationKeysTest < ActiveSupport::TestCase
 
   def teardown
     ApplicationKey.enable_backend!
+  end
+
+  test 'archive_as_deleted' do
+    application = FactoryBot.create(:simple_cinstance)
+
+    application_key = FactoryBot.create(:application_key, application: application)
+    assert_no_difference(DeletedObject.application_keys.method(:count)) { application_key.destroy! }
+
+    application_key = FactoryBot.create(:application_key, application: application)
+    application_key.stubs(destroyed_by_association: true)
+    assert_difference(DeletedObject.application_keys.method(:count)) { application_key.destroy! }
+    assert_equal application_key.id, DeletedObject.application_keys.last!.object_id
   end
 
   test 'have immutable value' do
@@ -59,6 +70,10 @@ class ApplicationKeysTest < ActiveSupport::TestCase
   end
 
   test 'remove! key if needed' do
+    # Adding this to test the correct scope
+    cinstance = FactoryBot.create(:cinstance)
+    cinstance.application_keys.add 'hello'
+
     key = @application_keys.add('whatever')
 
     # this prevents deleting last key
@@ -98,6 +113,13 @@ class ApplicationKeysTest < ActiveSupport::TestCase
     @application_keys.remove('some-key')
   end
 
+  test 'does not push webhook when it is destroyed by association' do
+    app_key = FactoryBot.create(:application_key)
+    app_key.application.expects(:push_web_hooks_later).with(event: 'key_deleted').never
+    app_key.destroyed_by_association = true
+    app_key.destroy!
+  end
+
   test 'update backend' do
     ApplicationKey.enable_backend!
 
@@ -118,25 +140,28 @@ class ApplicationKeysTest < ActiveSupport::TestCase
     end
   end
 
-  test 'delete keys when app is deleted' do
-    @application_keys.add('some-key')
-
-    ApplicationKey.enable_backend!
-
-    @application.reload
-
-    @application.expects(:web_hook_human_event).with(:event => 'deleted')
-    @application.expects(:web_hook_human_event).with(:event => 'key_deleted')
-    expect_backend_delete_key(@application, 'some-key')
-
-    @application.destroy
-  end
-
-
   def test_account_destroy_does_not_send_email
     account = subject.account.reload
-    CinstanceMessenger.expects(:key_deleted).never # because we are destroying the account and application
-    account.destroy
+    CinstanceMessenger.expects(:key_deleted).never # because we are destroying the account and application. hence destroying by association
+    account.destroy!
+  end
+
+  def test_destroy_sends_email
+    app_key = FactoryBot.create(:application_key)
+
+    cinstante_messenger_key_deleted = CinstanceMessenger.key_deleted(app_key.application, app_key.value)
+    CinstanceMessenger.expects(:key_deleted).with(app_key.application, app_key.value).returns(cinstante_messenger_key_deleted).once
+    cinstante_messenger_key_deleted.expects(:deliver)
+
+    app_key.destroy!
+  end
+
+  def test_destroyed_by_association_does_not_send_email
+    CinstanceMessenger.expects(:key_deleted).never
+
+    app_key = FactoryBot.create(:application_key)
+    app_key.stubs(destroyed_by_association: true)
+    app_key.destroy!
   end
 
   def test_format
@@ -155,10 +180,12 @@ class ApplicationKeysTest < ActiveSupport::TestCase
   def test_regenerate_key
     @application_keys.add(key = 'app-key')
     @application.reload
-    updated_at = @application.updated_at
-    @application_keys.regenerate(key)
-    # @application.reload
-    assert_not_equal updated_at, @application.updated_at
+    expected_updated_at = @application.updated_at + 2.hours
+
+    Timecop.travel(2.hours.from_now) do
+      @application_keys.regenerate(key)
+    end
+    assert_in_delta expected_updated_at, @application.updated_at, 1.second
 
   end
 
@@ -168,6 +195,36 @@ class ApplicationKeysTest < ActiveSupport::TestCase
 
     assert app_key.save
     assert value, app_key.reload.value
+  end
+
+  test 'is audited' do
+    app_key = FactoryBot.build(:application_key)
+
+    assert_difference(Audited.audit_class.method(:count)) do
+      ApplicationKey.with_auditing do
+        app_key.save!
+      end
+    end
+
+    assert_app_key_audit_data(app_key, Audited.audit_class.last!)
+
+    assert_difference(Audited.audit_class.method(:count)) do
+      ApplicationKey.with_auditing do
+        app_key.destroy!
+      end
+    end
+
+    assert_app_key_audit_data(app_key, Audited.audit_class.last!)
+  end
+
+  def assert_app_key_audit_data(app_key, audit)
+    assert_equal app_key.account.provider_account.id, audit.provider_id
+    assert_equal app_key.class.name, audit.kind
+    expected_audited_changes = {
+      'application_id' => app_key.application.id,
+      'created_at' => app_key.created_at.utc
+    }
+    assert_equal expected_audited_changes, audit.audited_changes
   end
 
 end

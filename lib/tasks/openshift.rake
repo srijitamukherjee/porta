@@ -36,52 +36,22 @@ ERROR_MESSAGE
 
     desc 'Start Thinking Sphinx engine with background index refreshing'
     task start: %i(environment) do
-      interface = ThinkingSphinx::RakeInterface.new
+      interface = ThinkingSphinx::RakeInterface.new nodetach: true
       daemon = interface.daemon
-      daemon.stop
-      interface.configure
-
-      require 'thread'
-      queue = Queue.new
-
-      Thread.abort_on_exception = true
-
-      reindex_interval = Integer(ENV['FULL_REINDEX_INTERVAL'] || '24').hours
-      reindex_thread = Thread.new do
-        loop do
-          warn 'Index starting'
-          queue << interface.sql.index(false)
-          warn 'Index finished'
-          sleep reindex_interval
-        end
-      end
-
-      queue.pop # wait for first full index
-
-      delta_interval = Integer(ENV['DELTA_INDEX_INTERVAL'] || '60').minutes
-      delta_thread = Thread.new do
-
-        loop do
-          warn 'Delta index starting'
-          queue << ThinkingSphinx::Deltas::DatetimeDelta.index
-          warn 'Delta index finished'
-          sleep delta_interval
-        end
-      end
-
-      queue.pop # wait for first delta index
-
-      daemon.start
+      trap('INT') { daemon.stop }
+      trap('TERM') { daemon.stop }
       at_exit { daemon.stop }
 
-      begin
-        delta_thread.join
-        reindex_thread.join
-      rescue Interrupt, SignalException
-        delta_thread.kill
-        reindex_thread.kill
-        daemon.stop
-      end
+      interface.configure
+
+      daemon.start
+    end
+
+    desc 'Cleanup pid and lock files from unclean shutdown'
+    task cleanup: %i[environment] do
+      indices_location = ThinkingSphinx::Configuration.instance.indices_location
+      files = Dir.glob(File.join(indices_location, '*.{lock,pid}'))
+      files.each(&FileUtils.method(:rm_f))
     end
   end
 

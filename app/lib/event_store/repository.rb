@@ -3,7 +3,6 @@
 
 module EventStore
   class Repository < Delegator
-    include ::ThreeScale::MethodTracing
 
     attr_reader :client, :facade
 
@@ -161,16 +160,14 @@ module EventStore
                       Domains::ProxyDomainsChangedEvent
                      )
       subscribe_event(ServiceTokenEventSubscriber.new, ServiceTokenDeletedEvent)
-      subscribe_event(UserEventSubscriber.new, Users::UserDeletedEvent)
       subscribe_event(ServiceDeletionSubscriber.new, Services::ServiceScheduledForDeletionEvent)
       subscribe_event(ServiceDeletedSubscriber.new, Services::ServiceDeletedEvent)
+      subscribe_event(ApplicationDeletedSubscriber.new, Applications::ApplicationDeletedEvent)
       subscribe_event(ProxyConfigEventSubscriber.new, ProxyConfigs::AffectingObjectChangedEvent)
       subscribe_event(ZyncSubscriber.new, ZyncEvent)
     end
 
     delegate :publish_event, to: :facade
-
-    add_three_scale_method_tracer :publish_event, 'EventStore/publish_event'
 
     protected
 

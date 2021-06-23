@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #FIXME: why is this controller not inheriting from Buyers::Base ?????
 class Buyers::ApplicationsController < FrontendController
 
@@ -6,13 +8,12 @@ class Buyers::ApplicationsController < FrontendController
   helper DisplayViewPortion::Helper
 
   before_action :authorize_partners
-  before_action :find_buyer, :only => [:new, :create]
-  before_action :authorize_multiple_applications, :only => [ :new, :create ]
+  before_action :find_buyer, only: %i[index create new]
+  before_action :find_plans, only: %i[new create]
+  before_action :authorize_multiple_applications, only: [:create]
 
   before_action :find_cinstance, :except => [:index, :create, :new]
   before_action :find_provider,  only: %i[new create update]
-
-  before_action :find_application_plan,          :only => :create
 
   activate_menu :buyers
 
@@ -24,11 +25,8 @@ class Buyers::ApplicationsController < FrontendController
     activate_menu :audience, :applications, :listing
 
     @states = Cinstance.allowed_states.collect(&:to_s).sort
-    accessible_services = current_account.accessible_services
-    @services = accessible_services.includes(:application_plans)
     @search = ThreeScale::Search.new(params[:search] || params)
-    @application_plans = current_account.application_plans.stock
-    @stock_and_custom_application_plans = current_account.application_plans.size
+    @application_plans = accessible_plans
 
     if params[:service_id]
       @service = accessible_services.find params[:service_id]
@@ -36,14 +34,13 @@ class Buyers::ApplicationsController < FrontendController
     end
 
     if params[:application_plan_id]
-      @plan = current_account.application_plans.find params[:application_plan_id]
+      @plan = @application_plans.find params[:application_plan_id]
       @search.plan_id = @plan.id
       @service ||= @plan.service
     end
 
     if params[:account_id]
-      @account = current_account.buyers.find params[:account_id]
-      @search.account = @account
+      @search.account = @account.id
       activate_menu :buyers, :accounts, :listing
     end
 
@@ -51,28 +48,30 @@ class Buyers::ApplicationsController < FrontendController
       .scope_search(@search).order_by(params[:sort], params[:direction])
       .preload(:service, user_account: [:admin_user], plan: [:pricing_rules])
       .paginate(pagination_params)
+      .decorate
 
     display_view_portion!(:service) if current_account.multiservice?
   end
 
   def new
-    @cinstance = @buyer.bought_cinstances.build
-    extend_cinstance_for_new_plan
-    @plans = @provider.application_plans.stock
+    @products = accessible_services
 
-    if params[:account_id]
-      @account = current_account.buyers.find params[:account_id]
-      activate_menu :buyers, :accounts
-    end
+    return activate_menu :audience, :applications, :listing if applications_context?
+
+    @cinstance = @account.bought_cinstances.build
+    extend_cinstance_for_new_plan
+
+    activate_menu :buyers, :accounts, :listing
   end
 
   # TODO: this should be done by buy! method
   def create
+    application_plan = @plans.find plan_id
     service_plan = if service_plan_id = params[:cinstance].delete(:service_plan_id)
-                     @application_plan.service.service_plans.find(service_plan_id)
+                     application_plan.service.service_plans.find(service_plan_id)
                    end
 
-    @cinstance = current_account.provider_builds_application_for(@buyer, @application_plan, params[:cinstance], service_plan)
+    @cinstance = current_account.provider_builds_application_for(@account, application_plan, params[:cinstance], service_plan)
     @cinstance.validate_human_edition!
 
     if @cinstance.save
@@ -80,7 +79,6 @@ class Buyers::ApplicationsController < FrontendController
       redirect_to(admin_service_application_path(@cinstance.service, @cinstance))
     else
       @cinstance.extend(AccountForNewPlan)
-      @plans = @provider.application_plans
       render :action => :new
     end
   end
@@ -126,7 +124,7 @@ class Buyers::ApplicationsController < FrontendController
   def change_plan
     # there is no need to query available_application_plans as we already have a validation
     service = @cinstance.service
-    new_plan = service.application_plans.stock.find(params[:cinstance][:plan_id])
+    new_plan = accessible_plans.stock.find(plan_id)
     @cinstance.provider_changes_plan!(new_plan)
     flash[:notice] = "Plan changed to '#{new_plan.name}'."
     redirect_to admin_service_application_url(service, @cinstance)
@@ -147,6 +145,12 @@ class Buyers::ApplicationsController < FrontendController
       flash[:notice] = 'Not possible to delete application'
       redirect_to :back
     end
+  end
+
+  protected
+
+  def applications_context?
+    !params[:account_id]
   end
 
   private
@@ -180,7 +184,14 @@ class Buyers::ApplicationsController < FrontendController
   end
 
   def find_buyer
-    @buyer = current_account.buyers.find(params[:account_id])
+    account_id = params[:account_id]
+    return unless account_id
+
+    @account = current_account.buyers.find(account_id)
+  end
+
+  def find_plans
+    @plans = accessible_plans.stock
   end
 
   def find_service(id = params[:service_id])
@@ -191,8 +202,18 @@ class Buyers::ApplicationsController < FrontendController
     @provider = current_account
   end
 
-  def find_application_plan
-    @application_plan = @provider.application_plans.find params[:cinstance][:plan_id]
+  def accessible_services
+    @accessible_services ||= current_user.accessible_services.includes(:application_plans)
+  end
+
+  helper_method :accessible_services
+
+  def accessible_plans
+    current_account.application_plans.where(issuer: accessible_services)
+  end
+
+  def plan_id
+    @plan_id ||= params.require(:cinstance).permit(:plan_id).tap { |plan_params| plan_params.require(:plan_id) }[:plan_id]
   end
 
   def authorize_partners
@@ -200,7 +221,7 @@ class Buyers::ApplicationsController < FrontendController
   end
 
   def authorize_multiple_applications
-    authorize! :manage, :multiple_applications if @buyer.has_bought_cinstance?
+    authorize! :manage, :multiple_applications if @account.has_bought_cinstance?
   end
 
   module AccountForNewPlan

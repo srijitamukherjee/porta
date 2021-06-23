@@ -55,10 +55,10 @@ module AccountHelper
   #TODO: test this helper
   def path_to_personal_details
     if current_account.provider?
-      host = current_account.admin_domain + request.port_string
+      host = current_account.external_admin_domain + request.port_string
       edit_provider_admin_user_personal_details_url(host: host, protocol: 'https')
     else
-      DeveloperPortal::Engine.routes.url_helpers.admin_account_personal_details_url(host: current_account.domain)
+      developer_portal.admin_account_personal_details_url(host: current_account.external_domain)
     end
   end
 
@@ -79,7 +79,7 @@ module AccountHelper
     alert = t('buyers.accounts.edit.delete.admin_restricted', admin: current_account.first_admin.try(:email))
 
     url = can?(:destroy, account) ? admin_buyers_account_path(account) : javascript_alert_url(alert)
-    delete_link_for(url, confirm: msg)
+    pf_delete_link_for(url, confirm: msg)
   end
 
   def master_on_premises?

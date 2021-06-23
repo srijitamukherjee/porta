@@ -3,11 +3,11 @@
 require 'test_helper'
 
 class ApplicationControllerTest < ActionDispatch::IntegrationTest
-  
+
   def setup
     @application_controller = ApplicationController.new
   end
-  
+
   attr_reader :application_controller
 
   def test_check_browser
@@ -33,20 +33,14 @@ class ApplicationControllerTest < ActionDispatch::IntegrationTest
     assert_equal '/?foo=bar&foo2=bar2', application_controller.send(:safe_return_to, 'http://example.com/?foo=bar&foo2=bar2')
   end
 
-  test '#target_host' do
-    provider = Account.new
-    provider.stubs(:admin_domain).returns('provider-admin.3scale.net')
-    request_object = ActionDispatch::Request.new({})
 
-    # Development environment
-    request_object.stubs(:raw_host_with_port).returns("master-admin.#{ThreeScale.config.dev_gtld}:3000")
-    application_controller.stubs(:request).returns(request_object)
-    assert_equal "provider-admin.3scale.net.#{ThreeScale.config.dev_gtld}:3000", application_controller.send(:target_host, provider)
+  test 'tracks proxy config affecting changes' do
+    provider = FactoryBot.create(:provider_account)
+    login! provider
 
-    # Production environment
-    ThreeScale.config.stubs(dev_gtld: nil)
-    request_object.stubs(:raw_host_with_port).returns('master-admin.3scale.net')
-    application_controller.stubs(:request).returns(request_object)
-    assert_equal 'provider-admin.3scale.net', application_controller.send(:target_host, provider)
+    ApplicationController.any_instance.expects(:track_proxy_affecting_changes)
+    ApplicationController.any_instance.expects(:flush_proxy_affecting_changes)
+
+    get admin_buyers_accounts_path
   end
 end

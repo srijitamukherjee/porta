@@ -1,13 +1,13 @@
 // @flow
 
 import * as React from 'react'
-import type { ShallowPolicy } from 'Policies/types/Policies'
-import type { Dispatch } from 'Policies/types'
+
+import type { RegistryPolicy, ThunkAction } from 'Policies/types'
 
 type Props = {
-  policy: ShallowPolicy,
+  policy: RegistryPolicy,
   title?: string,
-  onClick: Dispatch | (number) => {}
+  onClick: () => ThunkAction
 }
 
 const PolicyTile = function ({policy, onClick, title = 'Edit this Policy'}: Props): React.Node {
@@ -15,12 +15,8 @@ const PolicyTile = function ({policy, onClick, title = 'Edit this Policy'}: Prop
     <article onClick={onClick} className="Policy-article" title={title}>
       <h3 className="Policy-name">{policy.humanName}</h3>
       <p className="Policy-version-and-summary">
-        <span className="Policy-version">
-          {policy.version}
-        </span>
-        {' - '}
-        <span title={policy.summary} className="Policy-summary">
-          {policy.summary}
+        <span>
+          {`${policy.version} - ${policy.summary || ''}`}
         </span>
       </p>
     </article>

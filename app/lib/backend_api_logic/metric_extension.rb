@@ -7,12 +7,9 @@ module BackendApiLogic
     SYSTEM_NAME_SUFFIX_SEPARATOR = '.'
 
     included do
+      before_validation :reset_extended_system_name, if: :backend_api_metric?
       validate :unique_extended_system_name, if: :backend_api_metric?
       before_save :extend_system_name, if: :backend_api_metric?
-
-      def system_name
-        attributes['system_name'].to_s.gsub(/#{Regexp.escape(SYSTEM_NAME_SUFFIX_SEPARATOR)}\d+\z/, '')
-      end
     end
 
     def backend_api_metric?
@@ -35,16 +32,35 @@ module BackendApiLogic
       def hits_extended_system_name_regex
         /\Ahits(#{Regexp.escape(SYSTEM_NAME_SUFFIX_SEPARATOR)}\d+)?\z/
       end
+
+      def build_extended_system_name(system_name, owner_id:)
+        parts = [system_name_without_suffix(system_name, owner_id: owner_id), owner_id]
+        parts.compact.join SYSTEM_NAME_SUFFIX_SEPARATOR
+      end
+
+      def system_name_without_suffix(system_name, owner_id:)
+        system_name.to_s.gsub(/#{Regexp.escape(SYSTEM_NAME_SUFFIX_SEPARATOR)}#{owner_id}\z/, '')
+      end
     end
 
     protected
+
+    def system_name_without_suffix
+      self.class.system_name_without_suffix(attributes['system_name'], owner_id: owner_id)
+    end
+
+    def extended_system_name
+      return system_name_without_suffix unless backend_api_metric?
+      self.class.build_extended_system_name(attributes['system_name'], owner_id: owner_id)
+    end
 
     def extend_system_name
       self.system_name = extended_system_name
     end
 
-    def extended_system_name
-      [system_name, owner_id].join SYSTEM_NAME_SUFFIX_SEPARATOR
+    def reset_extended_system_name
+      return if system_name.blank?
+      self.system_name = system_name_without_suffix
     end
 
     def unique_extended_system_name

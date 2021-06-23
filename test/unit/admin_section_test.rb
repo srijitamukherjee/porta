@@ -1,15 +1,8 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 class AdminSectionTest < ActiveSupport::TestCase
-
-  def test_labels
-    labels = AdminSection.labels([:portal, :settings])
-    assert_equal 'Developer Portal, Settings', labels
-
-    labels = AdminSection.labels(%w[portal settings services])
-    assert_equal 'Developer Portal, Settings, Selected APIs', labels
-  end
-
   def test_permissions
     refute AdminSection.permissions.include?(:services)
     assert AdminSection.permissions.include?(:plans)

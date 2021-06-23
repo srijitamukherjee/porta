@@ -6,8 +6,6 @@ class Finance::BillingStrategyTest < ActiveSupport::TestCase
   should belong_to :account
   should validate_presence_of :numbering_period
 
-  disable_transactional_fixtures!
-
   def setup
     @provider = FactoryBot.create(:provider_with_billing)
 
@@ -92,66 +90,63 @@ class Finance::BillingStrategyTest < ActiveSupport::TestCase
   end
 
   test 'self.daily with providers excluded' do
-    2.times { FactoryBot.create(:prepaid_billing, :account => FactoryBot.create(:simple_provider)) }
-    2.times { FactoryBot.create(:postpaid_billing, :account => FactoryBot.create(:simple_provider)) }
+    other_providers = FactoryBot.create_list(:simple_provider, 4)
+
+    (0..1).each { |i| FactoryBot.create(:prepaid_billing, account: other_providers[i]) }
+    (2..3).each { |i| FactoryBot.create(:postpaid_billing, account: other_providers[i]) }
 
     results = Finance::BillingStrategy.daily(exclude: [ @provider.id ])
 
-    # 5 == master + 4
-    assert_equal 5, results.providers_count
+    other_providers.each { |provider| assert results[provider.id] }
+    refute results[@provider.id]
+
     assert results.successful?
   end
 
   test 'self.daily only with selected providers' do
-    3.times { FactoryBot.create(:prepaid_billing, :account => FactoryBot.create(:simple_provider)) }
+    other_providers = FactoryBot.create_list(:simple_provider, 3)
+    3.times { |i| FactoryBot.create(:prepaid_billing, account: other_providers[i]) }
 
     results = Finance::BillingStrategy.daily(only: [ @provider.id ])
 
-    assert_equal 1, results.providers_count
+    other_providers.each { |provider| refute results[provider.id] }
+    assert results[@provider.id]
+
     assert results.successful?
   end
 
   test 'self.daily skips suspended accounts' do
     Finance::BillingStrategy.delete_all # don't really want the ones from setup
 
-    1.times { FactoryBot.create(:prepaid_billing, :account => FactoryBot.create(:simple_provider, state: 'suspended')) }
-    1.times { FactoryBot.create(:prepaid_billing, :account => FactoryBot.create(:simple_provider, state: 'approved')) }
+    suspended_provider = FactoryBot.create(:simple_provider, state: 'suspended')
+    FactoryBot.create(:prepaid_billing, account: suspended_provider)
 
     results = Finance::BillingStrategy.daily
 
-    assert_equal 2, results.providers_count
+    assert results.skipped[suspended_provider.id]
+
     assert results.successful?
-    assert_equal 1, results.skipped.size
   end
 
   test 'currency cache returns string' do
-    # regression for https://3scale.airbrake.io/groups/55195006
     @bs.currency = 'USD'
     @bs.save
     assert_equal 'USD', ::Finance::BillingStrategy.account_currency(@provider.id)
   end
 
-  test 'allow EUR, USD but not blank currency' do
+  test 'allow Finance::BillingStrategy::CURRENCIES but not blank currency' do
     @bs.currency = 'giberrish'
     refute @bs.valid?
+    assert_equal 'invalid', @bs.errors[:currency].join('')
 
-    @bs.currency = 'USD'
-    assert @bs.valid?
-
-    @bs.currency = 'EUR'
-    assert @bs.valid?
+    Finance::BillingStrategy::CURRENCIES.each_value do |valid_currency|
+      @bs.currency = valid_currency
+      assert @bs.valid?
+    end
 
     @bs.currency = nil
     refute @bs.valid?, 'must have currency'
-    assert @bs.errors.has_key?(:currency)
-  end
-
-  test 'allow CHF and SAR' do
-    @bs.currency = 'CHF'
-    assert @bs.valid?
-
-    @bs.currency = 'SAR'
-    assert @bs.valid?
+    assert_equal 'invalid', @bs.errors[:currency].join('')
   end
 
   test 'default to highest number in month + 1' do

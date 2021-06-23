@@ -1,7 +1,9 @@
 class ApplicationKey < ApplicationRecord
+  include SaveDestroyForApplicationAssociation
 
   KEYS_LIMIT = 5
 
+  audited only: %i[application_id created_at]
 
   belongs_to :application, :class_name => 'Cinstance', :inverse_of => :application_keys
 
@@ -21,13 +23,17 @@ class ApplicationKey < ApplicationRecord
   after_commit :push_webhook_key_destroyed, :on => :destroy
 
   after_commit :notify_after_create, :on => :create, :if => :should_notify?
-  after_commit :notify_after_destroy, :on => :destroy, :if => :should_notify?
+  after_commit :notify_after_destroy, on: :destroy, if: -> { should_notify? && !destroyed_by_association }
 
   delegate :account, to: :application, allow_nil: true
 
   attr_readonly :value
 
   extend BackendClient::ToggleBackend
+
+  after_commit :destroy_backend_value, on: :destroy, unless: :destroyed_by_association
+
+  scope :without, ->(value) { where(['value <> ?', value])}
 
   module AssociationExtension
     include ReferrerFilter::AssociationExtension
@@ -57,14 +63,15 @@ class ApplicationKey < ApplicationRecord
       size < keys_limit
     end
 
+    # Need to use scoping because without is a method defined in Enumerable now and thus overriding the scope
     def can_remove?(value)
-      not proxy_association.owner.service.mandatory_app_key && without(value).empty?
+      !(proxy_association.owner.service.mandatory_app_key && scoping { ApplicationKey.without(value).empty?})
     end
 
     # Only oauth applicatinons can regenerate keys
     def regenerate(value)
       succeeded = false
-      renegerate_transaction = transaction do
+      regenerate_transaction = transaction do
         remove!(value)
         succeeded = add()
         proxy_association.owner.touch if succeeded
@@ -72,7 +79,7 @@ class ApplicationKey < ApplicationRecord
       end
 
       push_webhook_key_updated() if succeeded
-      renegerate_transaction
+      regenerate_transaction
     end
 
     private
@@ -119,13 +126,15 @@ class ApplicationKey < ApplicationRecord
                                           value)
   end
 
-  def destroy_backend_value
-    ThreeScale::Core::ApplicationKey.delete(application.service.backend_id,
-                                            application.application_id,
-                                            value)
-  end
+  delegate :provider_id_for_audits, to: :account, allow_nil: true
 
   protected
+
+  def destroy_backend_value
+    ApplicationKeyBackendService.delete(service_backend_id: application.service.backend_id,
+                                        application_backend_id: application.application_id,
+                                        value: value)
+  end
 
   def publish_application_event
     Applications::ApplicationUpdatedEvent.create_and_publish!(application)
@@ -144,7 +153,7 @@ class ApplicationKey < ApplicationRecord
   end
 
   def notify_after_destroy
-    CinstanceMessenger.key_deleted(application, value).deliver unless application.destroyed?
+    CinstanceMessenger.key_deleted(application, value).deliver
   end
 
   def push_webhook_key_created
@@ -152,15 +161,12 @@ class ApplicationKey < ApplicationRecord
   end
 
   def push_webhook_key_destroyed
-    application.push_web_hooks_later(:event => "key_deleted")
+    return if destroyed_by_association
+    application.push_web_hooks_later(event: 'key_deleted')
   end
 
   # same as in backend
   def self.generate
     SecureRandom.hex(16)
-  end
-
-  def self.without(value)
-    where(["#{table_name}.value <> ?", value])
   end
 end

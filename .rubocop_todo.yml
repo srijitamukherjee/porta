@@ -22,7 +22,6 @@ Style/AndOr:
   Exclude:
     - 'app/controllers/admin/account/payment_gateways_controller.rb'
     - 'app/controllers/admin/api/base_controller.rb'
-    - 'app/controllers/api/end_users_controller.rb'
     - 'app/controllers/buyers/accounts/bulk/send_emails_controller.rb'
     - 'app/controllers/buyers/applications/bulk/send_emails_controller.rb'
     - 'app/controllers/buyers/service_contracts/bulk/send_emails_controller.rb'
@@ -144,7 +143,6 @@ Style/CommentIndentation:
     - 'app/lib/three_scale/middleware/multitenant.rb'
     - 'test/factories/other.rb'
     - 'test/unit/cinstance/trial_test.rb'
-    - 'test/unit/end_user_test.rb'
     - 'test/unit/user_test.rb'
 
 # Offense count: 24
@@ -428,7 +426,6 @@ Style/NumericLiteralPrefix:
     - 'app/lib/logic/rolling_updates.rb'
     - 'lib/payment_gateways/ogone_crypt.rb'
     - 'lib/time_hacks.rb'
-    - 'test/functional/developer_portal/admin/account/adyen12_controller_test.rb'
     - 'test/integration/payment_gateways/ogone_test.rb'
     - 'test/integration/stats/services_test.rb'
     - 'test/unit/finance/variable_cost_calculation_test.rb'
@@ -584,7 +581,7 @@ Style/RescueModifier:
     - 'app/models/finance/billing_strategy.rb'
     - 'app/models/web_hook_failures.rb'
     - 'config/initializers/ruby1.9.rb'
-    - 'features/support/transforms.rb'
+    - 'features/support/parameter_types.rb'
     - 'app/lib/authentication/strategy/sso.rb'
     - 'app/lib/events/event.rb'
     - 'lib/payment_gateways/ogone_crypt.rb'
@@ -673,7 +670,6 @@ Style/SpaceAfterNot:
     - 'test/integration/provider_account_test.rb'
     - 'test/unit/api/by_provider_key_test.rb'
     - 'test/unit/cms/page_test.rb'
-    - 'test/unit/end_user_plan_test.rb'
     - 'test/unit/web_hook_test.rb'
 
 # Offense count: 38
@@ -765,7 +761,6 @@ Style/SpecialGlobalVars:
     - 'app/workers/web_hook_worker.rb'
     - 'lib/developer_portal/lib/liquid/tags/form.rb'
     - 'lib/developer_portal/test/dummy/config/boot.rb'
-    - 'lib/tasks/airbrake_tasks.rake'
     - 'lib/tasks/cms/cms.rake'
     - 'script/stress-test.rb'
     - 'test/minitest_helper.rb'

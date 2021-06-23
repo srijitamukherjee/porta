@@ -165,16 +165,21 @@
       attachEvents();
     })();
 
-
+    // DEPRECATED: since the introduction of PF4 and React, colorbox is being removed.
     // Response of this form will be presented inside a colorbox.
     $("form.colorbox[data-remote]").live("submit", function(e) {
       $(this).on('ajax:complete', function(event, xhr, status){
         var form = $(this).closest('form');
         var width = form.data('width');
-        $.colorbox({ open:true, html: xhr.responseText, width: width });
+        $.colorbox({
+          open: true,
+          html: xhr.responseText,
+          width: width,
+          maxWidth: '85%',
+          maxHeight: '90%'
+        });
       })
     });
-
 
     $("a.fancybox, a.colorbox").live("click", function(e) {
       $(this).colorbox({ open:true });
@@ -183,12 +188,6 @@
 
     $(".fancybox-close").live("click", function() {
       $.colorbox.close();
-      return false;
-    });
-
-    // Setup help bubbles.
-    $('img.helpButton').live('click', function() {
-      Help.toggleHelp(this);
       return false;
     });
 
@@ -237,8 +236,10 @@
       location.href = "?view=" + view + "&s=" + param + "&for_category=" + category;
     });
 
+    // DEPRECATED: since the introduction of PF4 and React, colorbox is being removed. Also jquery-ujs has been replaced with rails-ujs.
+    // Added #colorbox selector to target only non-React forms
     // show errors from ajax in formtastic
-    $('form').live('ajax:error', function(event, xhr, status, error) {
+    $('form:not(.pf-c-form)').live('ajax:error', function(event, xhr, status, error) {
       switch(status){
         case 'error':
           $.colorbox({html: xhr.responseText});

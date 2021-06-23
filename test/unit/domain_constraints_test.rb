@@ -2,17 +2,13 @@ require 'test_helper'
 
 class DomainConstraintsTest < ActiveSupport::TestCase
 
-  def setup
-    ThreeScale::DevDomain.stubs(enabled?: false)
-  end
-
   class BuyerDomainConstraintsTest < DomainConstraintsTest
     setup do
       ThreeScale.config.stubs(tenant_mode: 'multitenant')
       @domain = 'domain.example.com'
 
-      @request = mock
-      @request.stubs(:host).returns(@domain)
+      @request = ActionDispatch::TestRequest.create
+      @request.host = @domain
     end
 
     attr_reader :domain, :request
@@ -48,8 +44,8 @@ class DomainConstraintsTest < ActiveSupport::TestCase
       ThreeScale.config.stubs(tenant_mode: 'multitenant')
       @self_domain = 'admin.example.com'
 
-      @request = mock
-      @request.stubs(:host).returns(@self_domain)
+      @request = ActionDispatch::TestRequest.create
+      @request.host = @self_domain
       AuthenticatedSystem::Request.any_instance.stubs(:zync?).returns(false)
     end
 
@@ -83,28 +79,54 @@ class DomainConstraintsTest < ActiveSupport::TestCase
       assert Account.exists?(self_domain: self_domain)
       assert ProviderDomainConstraint.matches?(request)
     end
+
+    test 'master domain' do
+      master = master_account
+      request = ActionDispatch::TestRequest.create
+      request.host = master.domain
+
+      refute ProviderDomainConstraint.matches?(request)
+    end
   end
 
   class MasterDomainConstraintTest < DomainConstraintsTest
     test 'master domain' do
       master = master_account
-      request = mock
-      request.expects(:host).returns(master.domain)
+      request = ActionDispatch::TestRequest.create
+      request.host = master.domain
       assert MasterDomainConstraint.matches?(request)
     end
 
     test 'accepts any domain on premises' do
       ThreeScale.config.stubs(onpremises: true)
       ThreeScale.config.stubs(tenant_mode: 'master')
-      master = master_account
-      request = mock
 
-      request.stubs(:host).returns(master.domain)
+      master = master_account
+      request = ActionDispatch::TestRequest.create
+      request.host = master.domain
+
       assert MasterDomainConstraint.matches?(request)
 
       request.stubs(:host).returns('different' + master.domain)
       assert MasterDomainConstraint.matches?(request)
     end
   end
-end
 
+  class PortConstraintTest < ActiveSupport::TestCase
+    def setup
+      @constraint = PortConstraint.new(9090)
+    end
+
+    test 'accepts with correct port' do
+      request = ActionDispatch::TestRequest.create
+      request.host = 'domain.example.com:9090'
+      assert @constraint.matches?(request)
+    end
+
+    test 'rejects with incorrect port' do
+      request = ActionDispatch::TestRequest.create
+      request.host = 'domain.example.com:9395'
+      refute @constraint.matches?(request)
+    end
+  end
+end

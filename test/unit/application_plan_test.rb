@@ -14,23 +14,9 @@ class ApplicationPlanTest < ActiveSupport::TestCase
     assert_equal({}, ApplicationPlan.provided_by(''))
     assert_equal({}, ApplicationPlan.provided_by(:all))
     tenants.each do |tenant|
-      assert_same_elements ApplicationPlan.where(issuer_id: tenant.services.first).pluck(:id), ApplicationPlan.provided_by(tenant.id).pluck(:id)
+      assert_same_elements ApplicationPlan.where(issuer_id: tenant.services.first).pluck(:id), ApplicationPlan.provided_by(tenant).pluck(:id)
     end
   end
-
-  should 'not allow setting of end_user_required' do
-    plan = FactoryBot.create(:application_plan)
-    plan.end_user_required = true
-
-    assert plan.invalid?
-    assert !plan.errors[:end_user_required].blank?
-
-    plan.issuer.account.settings.allow_end_users!
-    plan.reload
-
-    assert plan.valid?
-  end
-
 
   context '#customize' do
     setup do

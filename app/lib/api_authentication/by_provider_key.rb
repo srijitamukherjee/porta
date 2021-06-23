@@ -17,8 +17,8 @@ module ApiAuthentication::ByProviderKey
                          elsif provider_key.present?
                            Account
                                .providers_with_master
-                               .by_self_domain(request.host)
-                               .find_by_provider_key(provider_key)
+                               .by_self_domain(request.internal_host)
+                               .first_by_provider_key(provider_key)
                          end
   end
   # rubocop:enable Rails/DynamicFindBy

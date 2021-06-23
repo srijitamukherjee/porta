@@ -1,31 +1,37 @@
-// TODO: Sort out styles libs after migration (webpack)
-// Copied from colors and typography for now
-$altoGray:       #d1d1d1; // pf-black-300
-$outerSpaceGray: #393f44; // pf-black-800
+.dashboard-list-icon-title-layout {
+  display: flex;
+  align-items: center;
+}
 
-$border-color: $altoGray;
-$border-width: 1px;
-$border-radius: 4px;
-$font-color: $outerSpaceGray;
+.dashboard-list-icon-title-layout svg {
+  font-size: 28px;
+  margin-right: 8px;
+}
 
-.ApiFilter {
+.dashboard-list-subtitle {
+  margin-top: 8px;
+}
 
-  float: left;
-  width: auto;
-  border: $border-width solid $border-color;
-  border-radius: $border-radius;
-  margin-bottom: 0.2rem;
-  margin-top: -0.2rem;
-  padding: 1px;
+.pf-c-card__footer {
+  margin-left: auto;
+}
 
-  span {
-    margin: 0.5rem;
-    color: $font-color
-  }
+.pf-c-data-list__item-row {
+  --pf-c-data-list__item-row--PaddingLeft: 0;
+}
 
-  input {
-    border: none;
-    width: auto;
-    padding: 0.5rem;
-  }
+.dashboard-list-secondary {
+  color: var(--pf-global--disabled-color--100);
+  font-size: var(--pf-global--FontSize--sm);
+}
+
+.dashboard-list-item-action > button.pf-c-dropdown__toggle {
+  height: 29px;
+  margin-top: -6px;
+}
+
+.apiContainer {
+  display: grid;
+  grid-gap: 16px;
+  grid-template-columns: 1fr 1fr;
 }

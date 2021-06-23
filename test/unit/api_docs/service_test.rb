@@ -5,9 +5,14 @@ class ApiDocs::ServiceTest < ActiveSupport::TestCase
 
   setup do
     @account = FactoryBot.create(:simple_provider)
+    @notify = NotificationCenter.disabled.dup
+    NotificationCenter.disabled << ApiDocs::Service
   end
 
   attr_reader :account
+  def teardown
+    NotificationCenter.disabled = @notify
+  end
 
   test 'save and skip_swagger_validations' do
     service = account.api_docs_services.new(name: 'this is a random name', body: '{}', skip_swagger_validations: '0')
@@ -552,6 +557,26 @@ class ApiDocs::ServiceTest < ActiveSupport::TestCase
     service = FactoryBot.create(:simple_service, account: api_docs_services.first.account)
     api_docs_services.first.update_column(:service_id, service.id)
     assert_equal [api_docs_services.last.id], ApiDocs::Service.without_service.pluck(:id)
+  end
+
+  test 'scope permitted_for' do
+    permitted_service, forbidden_service = FactoryBot.create_list(:simple_service, 2, account: account)
+
+    account_level_api_docs_service = FactoryBot.create(:api_docs_service, account: account, service: nil)
+    permitted_api_docs_service = FactoryBot.create(:api_docs_service, account: account, service: permitted_service)
+    forbidden_api_docs_service = FactoryBot.create(:api_docs_service, account: account, service: forbidden_service)
+
+    member = FactoryBot.create(:member, account: account, admin_sections: ['partners'])
+    member.member_permission_service_ids = [permitted_service.id]
+    member.save!
+
+    permitted_api_docs_service_ids = ApiDocs::Service.permitted_for(member).pluck(:id)
+    assert_includes permitted_api_docs_service_ids, account_level_api_docs_service.id
+    assert_includes permitted_api_docs_service_ids, permitted_api_docs_service.id
+    assert_not_includes permitted_api_docs_service_ids, forbidden_api_docs_service.id
+
+    all_api_docs_service_ids = ApiDocs::Service.permitted_for.pluck(:id)
+    assert_same_elements [account_level_api_docs_service.id, permitted_api_docs_service.id, forbidden_api_docs_service.id], all_api_docs_service_ids
   end
 
   private

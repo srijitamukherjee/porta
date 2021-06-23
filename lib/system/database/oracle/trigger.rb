@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'system/database/trigger'
+
 module System
   module Database
     module Oracle
@@ -36,7 +38,7 @@ module System
         protected
 
         def set_master_id
-          "master_id := #{master_id}"
+          "master_id := #{master_id};"
         rescue ActiveRecord::RecordNotFound
           <<~SQL
             BEGIN

@@ -1,5 +1,8 @@
 require 'test_helper'
 
+# TODO: Please split this file. It is too huge and takes too long
+# Finished in 170.63189s
+# 87 tests, 160 assertions, 0 failures, 0 errors, 0 skips
 class CinstanceTest < ActiveSupport::TestCase
 
   subject { @cinstance || FactoryBot.create(:cinstance) }
@@ -89,19 +92,6 @@ class CinstanceTest < ActiveSupport::TestCase
 
       end # service requires intentions
     end #description
-
-    should 'not allow setting of end_user_required' do
-      cinstance = FactoryBot.create(:cinstance)
-      cinstance.end_user_required = true
-
-      assert cinstance.invalid?
-      assert cinstance.errors[:end_user_required].presence
-
-      cinstance.plan.issuer.account.settings.allow_end_users!
-      cinstance.reload
-
-      assert cinstance.valid?
-    end
 
     context 'plan class validation' do
 
@@ -405,7 +395,6 @@ class CinstanceTest < ActiveSupport::TestCase
   end
 
   class SuspendTest < ActiveSupport::TestCase
-    disable_transactional_fixtures!
 
     setup do
       @cinstance = FactoryBot.create(:cinstance)
@@ -705,7 +694,6 @@ class CinstanceTest < ActiveSupport::TestCase
   end
 
   class WebHooksTest < ActiveSupport::TestCase
-    disable_transactional_fixtures!
     include WebHookTestHelpers
 
     subject { @cinstance || FactoryBot.create(:cinstance) }
@@ -857,7 +845,6 @@ class CinstanceTest < ActiveSupport::TestCase
   end
 
   class KeysTest < ActiveSupport::TestCase
-    disable_transactional_fixtures!
 
     test 'creating keys in backend is fired only when app is created' do
       app = FactoryBot.build(:cinstance)
@@ -877,7 +864,6 @@ class CinstanceTest < ActiveSupport::TestCase
       app.expects(:create_key_after_create?).never
       app.expects(:create_first_key).never
 
-      expect_backend_delete_key(app, app.application_keys.pluck_values.first)
       app.destroy
     end
   end

@@ -1,7 +1,6 @@
 require 'test_helper'
 
 class UserTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
 
   subject { @user || FactoryBot.create(:user) }
 
@@ -18,17 +17,31 @@ class UserTest < ActiveSupport::TestCase
 
   setup do
     ActionMailer::Base.deliveries = []
+    # This is needed, database will not save fractions of seconds
+    # so something like:
+    # Time.now.to_f #=> 1512012308.293877
+    # will be saved in DB as 1512012308
+    Timecop.freeze(Time.parse('2017-11-23 03:25:08 UTC +00:00'))
   end
 
-  test 'the user deleted event is created when the user is destroyed' do
-    account = FactoryBot.create(:simple_provider)
-    user = FactoryBot.create(:user, account: account)
+  def teardown
+    Timecop.return
+  end
 
-    assert_difference(EventStore::Event.where(event_type: Users::UserDeletedEvent).method(:count)) do
-      user.reload.destroy!
+  test 'archive_as_deleted' do
+    Features::SegmentDeletionConfig.stubs(enabled?: false) do
+      user = FactoryBot.create(:simple_user)
+
+      assert_no_difference(DeletedObject.users.method(:count)) { user.reload.destroy! }
     end
 
-    assert_equal user.id, EventStore::Event.where(event_type: Users::UserDeletedEvent).last!.data[:user_id]
+    Features::SegmentDeletionConfig.stubs(enabled?: true) do
+      user = FactoryBot.create(:simple_user)
+
+      assert_difference(DeletedObject.users.method(:count)) { user.reload.destroy! }
+
+      assert_equal user.id, DeletedObject.users.last!.object_id
+    end
   end
 
   def test_user_suspended_no_sessions
@@ -38,7 +51,7 @@ class UserTest < ActiveSupport::TestCase
     user.activate!
     assert user.user_sessions.present?
     assert user.can_login?
-    
+
     user.suspend!
     user.reload
     refute user.user_sessions.present?
@@ -51,7 +64,7 @@ class UserTest < ActiveSupport::TestCase
     assert_not_nil user.account.users.find_with_valid_password_token(token)
 
     user.expire_password_token
-    assert_nil user.account.users.find_with_valid_password_token(token)    
+    assert_nil user.account.users.find_with_valid_password_token(token)
   end
 
   def test_nullify_authentication_id
@@ -124,15 +137,19 @@ class UserTest < ActiveSupport::TestCase
     assert_equal [service.id], member.accessible_services.map(&:id)
   end
 
+  test '#find_by_username_or_email returns nil for TypeError' do
+    assert_nil User.find_by_username_or_email({"＄foo" => "bar1"})
+  end
+
   test '#multiple_accessible_services?' do
     provider = FactoryBot.create(:simple_provider)
     user = FactoryBot.create(:user, account: provider)
     FactoryBot.create_list(:simple_service, 2, account: provider)
 
-    Service.stubs(permitted_for_user: [provider.services.last!.id])
+    Service.stubs(permitted_for: [provider.services.last!.id])
     refute user.multiple_accessible_services?
 
-    Service.stubs(permitted_for_user: Service.all)
+    Service.stubs(permitted_for: Service.all)
     assert user.multiple_accessible_services?
 
     provider.services.first!.mark_as_deleted!
@@ -352,7 +369,7 @@ class UserTest < ActiveSupport::TestCase
     end
 
     should 'remember_me_for one week' do
-      before = 1.week.from_now.utc
+      before = 1.week.from_now
       @user.remember_me_for 1.week
       after = 1.week.from_now.utc
       assert_not_nil @user.remember_token
@@ -598,36 +615,6 @@ class UserTest < ActiveSupport::TestCase
     user.activate!
 
     assert user.can_login?
-  end
-
-  test '#full_name returns full name' do
-    user = User.new
-    assert user.full_name.blank?
-
-    user.first_name = 'Eric'
-    assert_equal 'Eric', user.full_name
-
-    user.first_name = nil
-    user.last_name = 'Cartman'
-    assert_equal 'Cartman', user.full_name
-
-    user.first_name = ''
-    user.last_name = 'Cartman'
-    assert_equal 'Cartman', user.full_name
-
-    user.first_name = 'Eric'
-    user.last_name = 'Cartman'
-    assert_equal 'Eric Cartman', user.full_name
-  end
-
-  test '#display_name returns full_name if it is present' do
-    user = User.new(:first_name => 'Kyle', :last_name => 'Broflowsky')
-    assert_equal 'Kyle Broflowsky', user.display_name
-  end
-
-  test '#display_name returns username if full_name is not present' do
-    user = User.new(:username => 'ninjaassassin')
-    assert_equal 'ninjaassassin', user.display_name
   end
 
   context 'deletion of users' do

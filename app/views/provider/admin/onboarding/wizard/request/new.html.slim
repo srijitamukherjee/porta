@@ -18,8 +18,8 @@ p
                     input_html: { placeholder: '/objects/list', autofocus: true },
                     wrapper_html: { class: 'slim' }
       code.code-example
-        span.code-example__base.code-example--slash = @request.proxy_base_url
-        span.code-example__path = @request.path_without_slash
+        span#proxy_base_url.code-example__base = @request.proxy_base_url
+        span.code-example__path = @request.path
         span.code-example__key.code-example__params = @request.proxy_auth_params
     li.feedback.feedback--inactive
       i.icon.fa-li.fa.fa-hdd-o.icon
@@ -27,19 +27,29 @@ p
         strong> 3scale
         ' will handle authentication and pass the request on to your API:
       code.code-example
-        span.code-example__base.code-example--slash = @request.api_base_url
-        span.code-example__path = @request.path_without_slash
+        span.code-example__base = @request.api_base_url
+        span.code-example__path = @request.path
 
     li.feedback.feedback--sec
-      i.icon.fa-li.fa.fa-puzzle-piece.icon
+      i.icon.fa-li.fa.icon class='fa-cubes'
       .text
         strong> = link_to @request.api_name, edit_provider_admin_onboarding_wizard_api_path
         ' will return a response to the customer through the gateway.
 
   = button_tag 'Send request', type: :submit, class: 'button button--next', data: { disable_with: 'Sending request…' }
 
-coffee:
-  $ ->
-    $("#request_path").on "change, keyup", ->
-      path = $(this).val().replace(/^\//, '')
-      $(".code-example__path").html(path)
+javascript:
+  $(function() {
+    const baseUrl = $('#proxy_base_url').text()
+    const baseUrlEscaped = baseUrl.charAt(baseUrl.length - 1) === '/'
+      ? baseUrl.slice(0, baseUrl.length - 1)
+      : baseUrl
+    $('#proxy_base_url').html(baseUrlEscaped)
+
+    $('#request_path').on('change, keyup', function() {
+      const path = $(this).val()
+      $('.code-example__path').html(path)
+    })
+  })
+
+

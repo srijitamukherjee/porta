@@ -11,13 +11,10 @@ class MetricExtensionTest < ActiveSupport::TestCase
   attr_reader :backend_api, :metric
 
   test 'extends metric system_name with backend api id' do
+    expected_system_name = "whatever.#{backend_api.id}"
     assert metric.save
-    assert_equal "whatever.#{backend_api.id}", metric.reload.attributes['system_name']
-  end
-
-  test 'keeps showing system name without the suffix' do
-    assert metric.save
-    assert_equal "whatever", metric.system_name
+    assert_equal expected_system_name, metric.reload.attributes['system_name']
+    assert_equal expected_system_name, metric.system_name
   end
 
   test '#backend_api_metric?' do
@@ -43,5 +40,32 @@ class MetricExtensionTest < ActiveSupport::TestCase
     refute service_hits.parent_id_for_service(service)
     assert_equal service_hits.id, service_method.parent_id_for_service(service)
     refute service_non_hits.parent_id_for_service(service)
+  end
+
+  test 'extended system_name on update' do
+    metric.system_name = "foo.#{backend_api.id}"
+    assert metric.valid?
+
+    metric.system_name = "foo.#{backend_api.id}0" # not the id of the backend api
+    refute metric.valid?
+
+    proxy_metric = FactoryBot.build(:metric, system_name: 'foo')
+    assert proxy_metric.valid?
+
+    proxy_metric.system_name = "foo.123"
+    refute proxy_metric.valid?
+  end
+
+  class ClassMethodsTest < ActiveSupport::TestCase
+    test '.build_extended_system_name' do
+      assert_equal 'system_name.123', Metric.build_extended_system_name('system_name', owner_id: 123)
+      assert_equal 'system_name.123', Metric.build_extended_system_name('system_name.123', owner_id: 123)
+      assert_equal 'system_name.456.123', Metric.build_extended_system_name('system_name.456', owner_id: 123)
+    end
+
+    test '.system_name_without_suffix' do
+      assert_equal 'system_name', Metric.system_name_without_suffix('system_name', owner_id: 123)
+      assert_equal 'system_name', Metric.system_name_without_suffix('system_name.123', owner_id: 123)
+    end
   end
 end

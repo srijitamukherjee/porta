@@ -1,28 +1,18 @@
-import React from 'react'
-import type { ChainPolicy, StoredChainPolicy } from 'Policies/types/Policies'
+// @flow
 
-const filteredPolicyKeys = ['configuration', 'name', 'version', 'enabled']
+import * as React from 'react'
 
-function filterPolicyKeys (policy: ChainPolicy): StoredChainPolicy {
-  return Object.keys(policy)
-    .filter(policyKey => filteredPolicyKeys.includes(policyKey))
-    .reduce((filteredPolicy, key) => {
-      filteredPolicy[key] = policy[key]
-      return filteredPolicy
-    }, {})
+import type { ChainPolicy } from 'Policies/types'
+
+type Props = {
+  policies: ChainPolicy[]
 }
 
-// TODO: Next iteration see if we can store the config as data field in Rails
-function parsePolicy (policy: ChainPolicy): StoredChainPolicy {
-  return {...filterPolicyKeys(policy), ...{configuration: policy.data}}
-}
+const PolicyChainHiddenInput = ({ policies }: Props): React.Node => {
+  // TODO: Next iteration see if we can store the config as data field in Rails
+  const parsedPolicies = policies.map(({ data, name, version, enabled }) => ({ configuration: data, name, version, enabled }))
+  const data = JSON.stringify(parsedPolicies)
 
-function parsePolicies (policies: Array<ChainPolicy>) {
-  return policies.map(policy => parsePolicy(policy))
-}
-
-const PolicyChainHiddenInput = ({policies}: {policies: Array<ChainPolicy>}) => {
-  let data = JSON.stringify(parsePolicies(policies))
   return (
     <input
       type='hidden'

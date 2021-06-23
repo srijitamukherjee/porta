@@ -5,7 +5,16 @@ module BackendApiLogic
     def policy_chain
       chain = super
       return chain unless with_subpaths?
-      Builder.new(service).to_a.concat(chain)
+
+      other_routing_policies, other_policies = chain.partition { |policy| policy['name'] == 'routing' }
+      other_routing_rules = other_routing_policies.flat_map { |policy| policy['configuration']['rules'] }
+
+      routing_policy = Builder.new(service).to_h
+
+      return other_policies if routing_policy['configuration']['rules'].concat(other_routing_rules).empty?
+
+      apicast_policy_index = other_policies.index { |policy| policy['name'] == 'apicast'}
+      other_policies.insert(apicast_policy_index, routing_policy).compact
     end
 
     def with_subpaths?
@@ -20,24 +29,23 @@ module BackendApiLogic
         @service = service
       end
 
-      def to_a
-        rules = backend_api_configs.reordering { sift(:desc, :path) }.each_with_object([]) do |config, collection|
+      def to_h
+        rules = backend_api_configs.sorted_for_proxy_config.each_with_object([]) do |config, collection|
           rule = Rule.new(config).as_json
           collection << rule if rule
         end
-        return [] if rules.empty?
-        [{
+        {
           name: "routing",
           version: "builtin",
           enabled: true,
           configuration: {
             rules: rules
           }
-        }].as_json
+        }.as_json
       end
 
       class Rule
-        delegate :private_endpoint, :path, to: :@config
+        delegate :private_endpoint, :path, :backend_api_id, to: :@config
 
         def initialize(config)
           @config = config
@@ -51,6 +59,8 @@ module BackendApiLogic
           return if private_endpoint.blank?
           {
             url: private_endpoint,
+            owner_id: backend_api_id,
+            owner_type: BackendApi.name,
             condition: {
               operations: [
                 match: :path,
@@ -64,7 +74,7 @@ module BackendApiLogic
         def replace_path
           return {} if config_path.blank?
 
-          { replace_path: "{{original_request.path | remove_first: '#{config_path.path}'}}" }
+          { replace_path: "{{uri | remove_first: '#{config_path.path}'}}" }
         end
       end
       private_constant :Rule

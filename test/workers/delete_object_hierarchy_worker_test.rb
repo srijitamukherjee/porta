@@ -3,12 +3,14 @@
 require 'test_helper'
 
 class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @object = FactoryBot.create(:metric)
   end
 
   def test_perform
-    Sidekiq::Testing.inline! do
+    perform_enqueued_jobs(except: SphinxIndexationWorker) do
       perform_expectations
 
       hierarchy_worker.perform_now(object)
@@ -17,13 +19,13 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
 
   def test_success_callback_method
     caller_worker_hierarchy = %w[HTestClass123 HTestClass1123]
-    DeletePlainObjectWorker.expects(:perform_later).with(object, caller_worker_hierarchy)
+    DeletePlainObjectWorker.expects(:perform_later).with(object, caller_worker_hierarchy, 'destroy')
     hierarchy_worker.new.on_success(1, {'object_global_id' => object.to_global_id, 'caller_worker_hierarchy' => caller_worker_hierarchy})
   end
 
   def test_complete_callback_method
     caller_worker_hierarchy = %w[HTestClass123 HTestClass1123]
-    DeletePlainObjectWorker.expects(:perform_later).with(object, caller_worker_hierarchy)
+    DeletePlainObjectWorker.expects(:perform_later).with(object, caller_worker_hierarchy, 'destroy')
     hierarchy_worker.new.on_complete(1, {'object_global_id' => object.to_global_id, 'caller_worker_hierarchy' => caller_worker_hierarchy})
   end
 
@@ -35,6 +37,22 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
 
   def hierarchy_worker
     DeleteObjectHierarchyWorker
+  end
+
+  class AssociationUnknownPrimaryKeyTest < ActiveSupport::TestCase
+    include ActiveJob::TestHelper
+
+    test 'the error is not raised and the object is removed' do
+      plan = FactoryBot.create(:application_plan)
+      feature = FactoryBot.create(:feature)
+      features_plan = plan.features_plans.create!(feature: feature)
+
+      assert_difference(plan.features_plans.method(:count), -1) do
+        perform_enqueued_jobs(except: SphinxIndexationWorker) { DeleteObjectHierarchyWorker.perform_now(feature) }
+      end
+
+      assert_raises(ActiveRecord::RecordNotFound) { feature.reload }
+    end
   end
 
   class DeleteObjectHierarchyWorkerWhenDoesNotHaveAssociationsTest < ActiveSupport::TestCase
@@ -50,6 +68,8 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
   end
 
   class DeleteObjectHierarchyWorkerWhenObjectDoesNotExistAnymoreTest < ActiveSupport::TestCase
+    include ActiveJob::TestHelper
+
     setup do
       @object = FactoryBot.create(:simple_account)
       Rails.logger.stubs(:info)
@@ -60,7 +80,7 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
     def test_perform_deserialization_error
       object.destroy!
       Rails.logger.expects(:info).with { |message| message.match(/DeleteObjectHierarchyWorker#perform raised ActiveJob::DeserializationError/) }
-      Sidekiq::Testing.inline! { DeleteObjectHierarchyWorker.perform_later(object) }
+      perform_enqueued_jobs(except: SphinxIndexationWorker) { DeleteObjectHierarchyWorker.perform_later(object) }
     end
 
     def test_success_record_not_found
@@ -85,8 +105,8 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
     def perform_expectations
       DeletePlainObjectWorker.stubs(:perform_later)
       DeleteObjectHierarchyWorker.stubs(:perform_later)
-      DeleteObjectHierarchyWorker.expects(:perform_later).with(Contract.new({ id: contract.id }, without_protection: true), anything)
-      DeleteObjectHierarchyWorker.expects(:perform_later).with(Plan.new({ id: customized_plan.id }, without_protection: true), anything)
+      DeleteObjectHierarchyWorker.expects(:perform_later).with(Contract.new({ id: contract.id }, without_protection: true), anything, 'destroy')
+      DeleteObjectHierarchyWorker.expects(:perform_later).with(Plan.new({ id: customized_plan.id }, without_protection: true), anything, 'destroy')
     end
 
     class AccountPlanTest < DeletePlanTest
@@ -106,7 +126,44 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
     end
   end
 
+  class DeleteServiceTest < DeleteObjectHierarchyWorkerTest
+    setup do
+      @object = @service = FactoryBot.create(:simple_service)
+
+      @service_plan = service.service_plans.first
+      @application_plan = FactoryBot.create(:application_plan, issuer: service)
+      @metrics = service.metrics
+      service.update_attribute :default_service_plan, service_plan
+      service.update_attribute :default_application_plan, application_plan
+      @api_docs_service = FactoryBot.create(:api_docs_service, service: service, account: service.account)
+
+      @backend_api = FactoryBot.create(:backend_api, account: service.account)
+      @backend_api_config = FactoryBot.create(:backend_api_config, service: service, backend_api: backend_api)
+    end
+
+    private
+
+    attr_reader :service, :service_plan, :application_plan, :metrics, :api_docs_service, :backend_api, :backend_api_config
+
+    def perform_expectations
+      DeletePlainObjectWorker.stubs(:perform_later)
+      DeleteObjectHierarchyWorker.stubs(:perform_later)
+
+      [service_plan, application_plan].each do |association|
+        DeleteObjectHierarchyWorker.expects(:perform_later).with(association, anything, 'destroy')
+      end
+      metrics.each { |metric| DeleteObjectHierarchyWorker.expects(:perform_later).with(metric, anything, 'destroy') }
+      DeleteObjectHierarchyWorker.expects(:perform_later).with(api_docs_service, anything, 'destroy')
+      DeleteObjectHierarchyWorker.expects(:perform_later).with(service.proxy, anything, 'destroy')
+
+      DeleteObjectHierarchyWorker.expects(:perform_later).with(backend_api_config, anything, 'destroy').once
+      DeleteObjectHierarchyWorker.expects(:perform_later).with(backend_api, anything, 'destroy').never
+    end
+  end
+
   class DeleteMemberPermissionThroughUserTest < ActiveSupport::TestCase
+    include ActiveJob::TestHelper
+
     def setup
       tenant = FactoryBot.create(:simple_provider)
       @member = FactoryBot.create(:member, account: tenant)
@@ -116,10 +173,52 @@ class DeleteObjectHierarchyWorkerTest < ActiveSupport::TestCase
     attr_reader :member, :member_permission
 
     def test_perform
-      Sidekiq::Testing.inline! { DeleteObjectHierarchyWorker.perform_now(member) }
+      perform_enqueued_jobs(except: SphinxIndexationWorker) { DeleteObjectHierarchyWorker.perform_now(member) }
 
       assert_raises(ActiveRecord::RecordNotFound) { member_permission.reload }
       assert_raises(ActiveRecord::RecordNotFound) { member.reload }
+    end
+  end
+
+  class BackgroundAssociationListsTest < ActiveSupport::TestCase
+
+    class DoubleObject
+
+      def id
+        1
+      end
+
+      def to_global_id
+        'double/1'
+      end
+
+      def service
+        Service.new({ id: 1}, without_protection: true)
+      end
+    end
+
+    class DoubleWithBackgroundDestroyAssociation < DoubleObject
+
+      include BackgroundDeletion
+      self.background_deletion = { service: { action: :destroy, has_many: false } }
+    end
+
+    class DoubleWithBackgroundDeleteAssociation < DoubleObject
+
+      include BackgroundDeletion
+      self.background_deletion = { service: { action: :delete, has_many: false } }
+    end
+
+    def test_defined_background_destroy_associations
+      double_object = DoubleWithBackgroundDestroyAssociation.new
+      DeleteObjectHierarchyWorker.expects(:perform_later).with(double_object.service, anything, 'destroy').once
+      DeleteObjectHierarchyWorker.perform_now(double_object)
+    end
+
+    def test_defined_background_delete_associations
+      double_object = DoubleWithBackgroundDeleteAssociation.new
+      DeleteObjectHierarchyWorker.expects(:perform_later).with(double_object.service, anything, 'delete').once
+      DeleteObjectHierarchyWorker.perform_now(double_object)
     end
   end
 end

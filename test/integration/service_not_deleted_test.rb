@@ -3,7 +3,7 @@
 require 'test_helper'
 require 'sidekiq/testing'
 
-class ServiceNotDeletoedTest < ActionDispatch::IntegrationTest
+class ServiceNotDeletedTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   disable_transactional_fixtures!
@@ -16,7 +16,7 @@ class ServiceNotDeletoedTest < ActionDispatch::IntegrationTest
   def test_not_deleted
     @provider.settings.allow_multiple_services!
 
-    perform_enqueued_jobs(except: IndexProxyRuleWorker) do
+    perform_enqueued_jobs(except: [IndexProxyRuleWorker, SphinxIndexationWorker]) do
       (ENV['BRUTOFORCE'].present? ? 2000 : 1).times do |i|
         service_name = "service foo #{i}"
         post(admin_api_services_path, provider_key: @provider.api_key, format: :json, name: service_name)

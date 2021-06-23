@@ -1,25 +1,28 @@
 // @flow
 
 import { initialState } from 'Policies/reducers/initialState'
-import { createReducer, updateError, updateObject } from 'Policies/util'
+import { createReducer } from 'Policies/util'
 
-import type { State } from 'Policies/types/State'
+import type { Reducer, UIState, FetchErrorAction } from 'Policies/types'
 import type { UIComponentTransitionAction } from 'Policies/actions/UISettings'
 
-function updateComponentTransition (state: State, action: UIComponentTransitionAction): State {
-  return updateObject(state, {[action.hide]: false, [action.show]: true})
+function updateComponentTransition (state: UIState, action: UIComponentTransitionAction): UIState {
+  // $FlowIgnore[invalid-computed-prop] hide and show are primitive literals
+  return { ...state, [action.hide]: false, [action.show]: true }
 }
 
 function updateRequestsCounter (number: number) {
-  return function (state) {
-    return updateObject(state, {requests: state.requests + number})
+  return function (state: UIState): UIState {
+    return { ...state, requests: state.requests + number }
   }
 }
 
-// eslint-disable-next-line space-infix-ops
-// const UISettingsReducer = createReducer<UIState>(initialState.ui, {
-// $FlowFixMe TODO: in order to fully type createReducer, set UIState and re-enable flow. (use lines above)
-const UISettingsReducer = createReducer(initialState.ui, {
+function updateError (state: UIState, action: FetchErrorAction) {
+  return { ...state, error: action.payload }
+}
+
+// TODO: use combineReducers instead of createReducer
+const UISettingsReducer: Reducer<UIState> = createReducer<UIState>(initialState.ui, {
   'UI_COMPONENT_TRANSITION': updateComponentTransition,
   'FETCH_CHAIN_ERROR': updateError,
   'FETCH_REGISTRY_ERROR': updateError,

@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-# TODO: Rails 5 --> class DeleteObjectHierarchyWorker < ApplicationJob
-class DeleteObjectHierarchyWorker < ActiveJob::Base
+class DeleteObjectHierarchyWorker < ApplicationJob
 
   # TODO: Rails 5 --> discard_on ActiveJob::DeserializationError
   # No need of ActiveRecord::RecordNotFound because that can only happen in the callbacks and those callbacks don't use this rescue_from but its own rescue
@@ -12,7 +11,7 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
   queue_as :deletion
 
   before_perform do |job|
-    @object, workers_hierarchy = job.arguments
+    @object, workers_hierarchy, @background_destroy_method = job.arguments
     id = "Hierarchy-#{object.class.name}-#{object.id}"
     @caller_worker_hierarchy = Array(workers_hierarchy) + [id]
     info "Starting #{job.class}#perform with the hierarchy of workers: #{caller_worker_hierarchy}"
@@ -22,7 +21,7 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
     info "Finished #{job.class}#perform with the hierarchy of workers: #{caller_worker_hierarchy}"
   end
 
-  def perform(_object, _caller_worker_hierarchy = [])
+  def perform(_object, _caller_worker_hierarchy = [], _background_destroy_method = 'destroy')
     build_batch
   end
 
@@ -38,7 +37,8 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
     workers_hierarchy = options['caller_worker_hierarchy']
     info "Starting DeleteObjectHierarchyWorker##{method_name} with the hierarchy of workers: #{workers_hierarchy}"
     object = GlobalID::Locator.locate(options['object_global_id'])
-    DeletePlainObjectWorker.perform_later(object, workers_hierarchy)
+    background_destroy_method = @background_destroy_method.presence || 'destroy'
+    DeletePlainObjectWorker.perform_later(object, workers_hierarchy, background_destroy_method)
     info "Finished DeleteObjectHierarchyWorker##{method_name} with the hierarchy of workers: #{workers_hierarchy}"
   rescue ActiveRecord::RecordNotFound => exception
     info "DeleteObjectHierarchyWorker##{method_name} raised #{exception.class} with message #{exception.message}"
@@ -53,7 +53,7 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
   def build_batch
     batch = Sidekiq::Batch.new
     batch.description = batch_description
-    batch_callbacks(batch) { batch.jobs { delete_associations } }
+    batch_callbacks(batch) { batch.jobs { destroy_and_delete_associations } }
     batch
   end
 
@@ -74,18 +74,24 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
     end
   end
 
-  def delete_associations
-    destroyable_associations.each do |reflection|
+  def destroy_and_delete_associations
+    Array(object.background_deletion).each do |association_config|
+      reflection = BackgroundDeletion::Reflection.new(association_config)
+      next unless destroyable_association?(reflection.name)
+
       ReflectionDestroyer.new(object, reflection, caller_worker_hierarchy).destroy_later
     end
   end
 
+  def destroyable_association?(_association)
+    true
+  end
+
   private
 
-  def destroyable_associations
-    object.class.reflect_on_all_associations.select do |reflection|
-      reflection.options[:dependent] == :destroy
-    end
+  def called_from_provider_hierarchy?
+    return unless (tenant_id = object.tenant_id)
+    caller_worker_hierarchy.include?("Hierarchy-Account-#{tenant_id}")
   end
 
   def callback_options
@@ -93,6 +99,7 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
   end
 
   class ReflectionDestroyer
+
     def initialize(main_object, reflection, caller_worker_hierarchy)
       @main_object = main_object
       @reflection = reflection
@@ -100,7 +107,7 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
     end
 
     def destroy_later
-      reflection.macro == :has_many ? destroy_has_many_association : destroy_has_one_association
+      reflection.many? ? destroy_has_many_association : destroy_has_one_association
     end
 
     attr_reader :main_object, :reflection, :caller_worker_hierarchy
@@ -113,6 +120,8 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
         associated_object.id = associated_object_id
         delete_associated_object_later(associated_object)
       end
+    rescue ActiveRecord::UnknownPrimaryKey => exception
+      Rails.logger.info "DeleteObjectHierarchyWorker#perform raised #{exception.class} with message #{exception.message}"
     end
 
     def destroy_has_one_association
@@ -121,15 +130,15 @@ class DeleteObjectHierarchyWorker < ActiveJob::Base
     end
 
     def delete_associated_object_later(associated_object)
-      association_delete_worker.perform_later(associated_object, caller_worker_hierarchy) if associated_object.try(:id)
+      association_delete_worker.perform_later(associated_object, caller_worker_hierarchy, reflection.background_destroy_method) if associated_object.try(:id)
     end
 
     def association_delete_worker
       case reflection.class_name
       when Account.name
         DeleteAccountHierarchyWorker
-      when Service.name
-        DeleteServiceHierarchyWorker
+      when PaymentGatewaySetting.name
+        DeletePaymentSettingHierarchyWorker
       else
         DeleteObjectHierarchyWorker
       end

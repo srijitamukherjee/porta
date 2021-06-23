@@ -33,7 +33,7 @@ class Api::ApplicationsController < Api::BaseController
 
     if params[:account_id]
       @account = current_account.buyers.find params[:account_id]
-      @search.account = @account
+      @search.account = @account.id
       activate_menu :buyers, :accounts
     end
 
@@ -41,6 +41,7 @@ class Api::ApplicationsController < Api::BaseController
                       .scope_search(@search).order_by(params[:sort], params[:direction])
                       .preload(:service, user_account: [:admin_user], plan: [:pricing_rules])
                       .paginate(pagination_params)
+                      .decorate
   end
 
   def show
@@ -48,6 +49,10 @@ class Api::ApplicationsController < Api::BaseController
   end
 
   def edit; end
+
+  def new
+    @provider = current_account
+  end
 
   private
 

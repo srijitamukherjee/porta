@@ -1,25 +1,39 @@
 # frozen_string_literal: true
 
 class Provider::Admin::BackendApisController < Provider::Admin::BaseController
-  before_action :find_backend_api, except: %i[new create]
-  before_action :authorize
+  include SearchSupport
+  include ThreeScale::Search::Helpers
+
+  load_and_authorize_resource :backend_api, through: :current_user, through_association: :accessible_backend_apis
 
   activate_menu :backend_api, :overview
   layout 'provider'
 
+  def index
+    activate_menu :backend_apis
+    search = ThreeScale::Search.new(params[:search] || params)
+    @backend_apis = current_account.backend_apis
+                                   .order(updated_at: :desc)
+                                   .scope_search(search)
+    @page_backend_apis = @backend_apis.paginate(pagination_params)
+                                      .decorate
+                                      .to_json(only: %i[name updated_at id private_endpoint system_name], methods: %i[links products_count])
+  end
+
   def new
-    activate_menu :dashboard
-    @backend_api = collection.build params[:backend_api]
+    activate_menu :backend_apis
   end
 
   def create
-    @backend_api = current_account.backend_apis.build(create_params)
-    if @backend_api.save
-      redirect_to provider_admin_backend_api_path(@backend_api), notice: 'Backend created'
-    else
-      flash.now[:error] = 'Backend could not be created'
-      activate_menu :dashboard
-      render :new
+    respond_to do |format|
+      if @backend_api.save
+        format.json { render json: @backend_api.decorate.add_backend_usage_backends_data, status: :created }
+        format.html { redirect_to provider_admin_backend_api_path(@backend_api), notice: 'Backend created' }
+      else
+        flash.now[:error] = 'Backend could not be created'
+        format.json { render json: @backend_api.errors, status: :unprocessable_entity }
+        format.html { render :new }
+      end
     end
   end
 
@@ -50,23 +64,13 @@ class Provider::Admin::BackendApisController < Provider::Admin::BaseController
   DEFAULT_PARAMS = %i[name description private_endpoint].freeze
   private_constant :DEFAULT_PARAMS
 
-  def find_backend_api
-    @backend_api = current_account.backend_apis.accessible.find(params[:id])
+  def backend_api_params(*extra_params)
+    params.require(:backend_api).permit(DEFAULT_PARAMS | extra_params)
   end
 
   def create_params
-    params.require(:backend_api).permit(DEFAULT_PARAMS | %i[system_name])
+    backend_api_params(:system_name)
   end
 
-  def update_params
-    params.require(:backend_api).permit(DEFAULT_PARAMS)
-  end
-
-  def authorize
-    authorize! :manage, BackendApi
-  end
-
-  def collection
-    current_account.backend_apis
-  end
+  alias update_params backend_api_params
 end

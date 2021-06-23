@@ -1,7 +1,6 @@
 require 'test_helper'
 
 class AuditedHacksTest < ActiveSupport::TestCase
-  disable_transactional_fixtures!
 
   def setup
     @provider = FactoryBot.create(:provider_account)
@@ -15,6 +14,8 @@ class AuditedHacksTest < ActiveSupport::TestCase
 
     Cinstance.with_auditing do
       assert_difference Audited.audit_class.method(:count) do
+        SphinxIndexationWorker.stubs(:perform_later)
+
         Sidekiq::Testing.inline! do
           @provider.bought_cinstance.change_user_key!
         end

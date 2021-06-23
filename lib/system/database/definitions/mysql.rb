@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'system/database/mysql'
+
 System::Database::MySQL.define do
   trigger 'accounts' do
     <<~SQL
@@ -58,12 +60,6 @@ System::Database::MySQL.define do
       ELSEIF NEW.configurable_type = 'Service' THEN
         SET NEW.tenant_id = (SELECT tenant_id FROM services WHERE id = NEW.configurable_id AND tenant_id <> master_id);
       END IF;
-    SQL
-  end
-
-  trigger 'end_user_plans' do
-    <<~SQL
-      SET NEW.tenant_id = (SELECT tenant_id FROM services WHERE id = NEW.service_id AND tenant_id <> master_id);
     SQL
   end
 
@@ -510,6 +506,12 @@ System::Database::MySQL.define do
   trigger 'payment_details' do
     <<~SQL
       SET NEW.tenant_id = (SELECT tenant_id FROM accounts WHERE id = NEW.account_id AND tenant_id <> master_id);
+    SQL
+  end
+
+  trigger 'payment_intents' do
+    <<~SQL
+      SET NEW.tenant_id = (SELECT tenant_id FROM invoices WHERE id = NEW.invoice_id AND tenant_id <> master_id);
     SQL
   end
 

@@ -1,21 +1,16 @@
 = javascript_pack_tag 'navigation'
+= javascript_pack_tag 'PF4Styles/header'
 
 header.pf-c-page__header id="user_widget" class='Header' class=('Header--master' if current_account.master?) role='banner'
 
   = link_to provider_admin_dashboard_path, class: 'pf-c-page__header-brand Header-link', title: 'Dashboard' do
-      .Header-logo class=('Header-logo--withIcon' if active_menu?(:main_menu, :dashboard))
-        | Red Hat 3scale API Management
+      .Header-logo
+        span Red Hat 3scale API Management
 
-  .pf-c-page__header-nav
+  div
     = render 'shared/api_selector'
 
   .pf-c-page__header-tools
-    .PopNavigation.PopNavigation--account
-      - link = can?(:manage, current_account) ? provider_admin_account_path : edit_provider_admin_user_personal_details_path
-
-      a.PopNavigation-trigger class=('is-current' if active_menu?(:topmenu, :account)) href="#{link}"  title="Account Settings"
-        => icon('cog')
-
     // HACK of the month. See features/support/current_user.rb if you are hungry for reasons
     div class="username" style="display:none;"
       = current_user.username
@@ -46,7 +41,7 @@ header.pf-c-page__header id="user_widget" class='Header' class=('Header--master'
               ' Impersonating a virtual admin user from
             - else
               ' Signed in to
-            => current_user.account.name
+            => current_account.name
             ' as
             = current_user.display_name
             | .

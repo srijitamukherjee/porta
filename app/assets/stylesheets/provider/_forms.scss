@@ -149,10 +149,6 @@ form.formtastic fieldset.inputs > ol > li.select select {
   border-radius: $border-radius;
 }
 
-form.formtastic fieldset.inputs > ol > li.select select {
-
-}
-
 form.formtastic fieldset.buttons {
   border-top: $border-width solid $border-color;
   text-align: right;
@@ -203,6 +199,15 @@ form + form .action.delete {
 
 form.formtastic ol > li#api_docs_service_body_input {
     max-width: 100%;
+}
+
+form.formtastic {
+  #settings,
+  #staging {
+    .inputs ol {
+      position: relative;
+    }
+  }
 }
 
 form.formtastic ol > li {
@@ -417,7 +422,7 @@ form.formtastic .radio fieldset {
   margin: 0 0 line-height-times(1/4) 0;
 }
 
-.dashboard_bubble form.formtastic fieldset > ol > li.boolean label {
+.dashboard_card form.formtastic fieldset>ol>li.boolean label {
   padding-left:0;
 }
 
@@ -540,8 +545,8 @@ li.hidden {
 #new_service_wrapper {
   .errorMessage {
     color: $error-color;
-    margin-bottom: line-height-times(1/2);
-    margin-top: -#{$fieldset-margin-bottom};
+    margin: 0;
+    padding: 0 line-height-times(1);
   }
 
   .new-service-source-input {
@@ -550,7 +555,21 @@ li.hidden {
 }
 
 // Overrides
-.dashboard_bubble form.formtastic {
+.new-service-form {
+  @include white-box-shadow;
+
+  form.formtastic {
+    box-shadow: none;
+    margin: 0;
+
+    fieldset {
+      margin-bottom: 0;
+    }
+  }
+}
+
+
+.dashboard_card form.formtastic {
   box-shadow: none;
   margin: 0;
   padding: line-height-times(1) 0 0;
@@ -559,15 +578,16 @@ li.hidden {
 #integration-tabs {
   form.formtastic {
     box-shadow: none;
-  }
+    margin: 0;
+    padding: 0;
 
-  form.formtastic.u-inline {
-    display: inline-block;
+    &.staging-settings {
+      @include white-box-shadow;
+      padding: line-height-times(1);
+    }
   }
 }
 
 form#liquid-settings > fieldset {
   border-top: 0;
 }
-
-

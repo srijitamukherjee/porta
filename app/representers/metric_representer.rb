@@ -12,6 +12,7 @@ module MetricRepresenter
   property :description
 
   property :unit
+  property :parent_id, if: ->(*) { method_metric? }
 
   property :created_at
   property :updated_at
@@ -26,9 +27,5 @@ module MetricRepresenter
 
   link :self do
     polymorphic_url([:admin, :api, owner, self])
-  end
-
-  def system_name
-    backend_api_metric? ? attributes['system_name'] : super
   end
 end

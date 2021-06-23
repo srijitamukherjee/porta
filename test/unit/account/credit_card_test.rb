@@ -24,8 +24,10 @@ class Account::CreditCardTest < ActiveSupport::TestCase
     assert_equal :credit_card_auth_code, account.credit_card_stored_attribute
 
     provider_account.payment_gateway_type = :authorize_net
-
     assert_equal :credit_card_authorize_net_payment_profile_token, account.credit_card_stored_attribute
+
+    provider_account.payment_gateway_type = :stripe
+    assert_equal :credit_card_partial_number, account.credit_card_stored_attribute
   end
 
   test 'credit_card_stored? return true when credit_card_auth_code present for payment gateways different from authorize.net' do
@@ -143,7 +145,6 @@ class Account::CreditCardTest < ActiveSupport::TestCase
   end
 
   class CallbacksTest < ActiveSupport::TestCase
-    disable_transactional_fixtures!
 
     def test_add_credit_card_details
       account = FactoryBot.create(:provider_account)

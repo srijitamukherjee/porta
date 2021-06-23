@@ -38,7 +38,6 @@ $font-weight-bold: 600;
 
 //families
 $font-family-text: $font-family-base;
-$font-family-code: $font-family-monospace;
 
 // colors
 $color-grey-1: $font-color;
@@ -122,10 +121,6 @@ a, .link {
 header {
   @include leader(1);
   @include trailer(2);
-}
-
-code {
-  font-family: $font-family-code;
 }
 
 h1 {
@@ -477,8 +472,13 @@ $code-color-params: $color-brand-primary;
 
   .code-example--slash:after {
     content: '/';
+    color: $color-brand-secondary;
+  }
+
+  .feedback--inactive .code-example--slash:after {
     color: $color-text-secondary;
   }
+ 
   .code-example--optional {
 
     &:before {
@@ -526,6 +526,10 @@ $feedback-color-inactive: $color-text-secondary;
     position: relative;
     top: $line-height * 2;
     left: $line-height * -2;
+  }
+
+  &.feedback--connect {
+    padding-bottom: 0;
   }
 
   &.feedback--sec {

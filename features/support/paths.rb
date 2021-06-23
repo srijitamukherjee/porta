@@ -3,7 +3,7 @@
 World(Module.new do
   break unless defined?(DeveloperPortal)
 
-  include DeveloperPortal::Engine.routes.url_helpers
+  include System::UrlHelpers.cms_url_helpers
 
   def provider_first_service!
     @provider.first_service!
@@ -252,31 +252,6 @@ World(Module.new do
     when 'the new service page'
       new_admin_service_path
 
-    when /^the edit page for end user plan "(.+?)"$/
-      plan = EndUserPlan.find_by_name! $1
-      edit_admin_end_user_plan_path(plan)
-
-    when /^the end user plans of service "(.+?)" page of provider "(.+?)"$/
-      #OPTIMIZE: instead of doing 'of provider "..."' it is better to keep provider_account
-      # in @current_account in a session/login step
-      provider = Account.providers.find_by_org_name! $2
-      service = provider.services.find_by_name! $1
-      admin_service_end_user_plans_path(service)
-
-    when /^the end users of service "(.+?)" page of provider "(.+?)"$/
-      #OPTIMIZE: instead of doing 'of provider "..."' it is better to keep provider_account
-      # in @current_account in a session/login step
-      provider = Account.providers.find_by_org_name! $2
-      service = provider.services.find_by_name! $1
-      admin_service_end_users_path(service)
-
-    when /^the end user "(.+?)" of service "(.+?)" page of provider "(.+?)"$/
-      #OPTIMIZE: instead of doing 'of provider "..."' it is better to keep provider_account
-      # in @current_account in a session/login step
-      provider = Account.providers.find_by_org_name! $3
-      service = provider.services.find_by_name! $2
-      admin_service_end_user_path(service, $1)
-
     when 'the account plans admin page'
       admin_buyers_account_plans_path
 
@@ -295,6 +270,10 @@ World(Module.new do
     when /^the edit page for plan "([^"]*)"$/, /^the edit for plan "([^"]*)" page$/
       plan = Plan.find_by_name!($1)
       edit_polymorphic_path([:admin, plan])
+
+    when /^the service backends admin page of service "(.+?)"$/
+      service = Service.find_by!(name: $1)
+      admin_service_backend_usages_path(service)
 
     #
     # Account plans (buyer side)
@@ -345,9 +324,16 @@ World(Module.new do
     #
     # Applications (provider side)
     #
-    when /^the provider side create application page for "([^"]*)"$/
-      buyer = Account.buyers.find_by_org_name($1)
+    when /^the account context create application page for "([^"]*)"$/
+      buyer = Account.buyers.find_by!(org_name: $1)
       new_admin_buyers_account_application_path(buyer)
+
+    when /^the audience context create application page$/
+      new_admin_buyers_application_path
+
+    when /^the product context create application page for "([^"]*)"$/
+      product = Service.find_by!(name: $1)
+      new_admin_service_application_path(product)
 
     when /^the provider side "([^"]*)" application page$/
       application = Cinstance.find_by_name!($1)
@@ -364,6 +350,14 @@ World(Module.new do
     when 'the applications admin page',
          /^the applications admin page with (\d+) records? per page$/
       admin_buyers_applications_path(:per_page => $1)
+
+    when /^the account context applications page for "([^"]*)"$/
+      buyer = Account.buyers.find_by!(org_name: $1)
+      admin_buyers_account_applications_path(buyer)
+
+    when /^the product context applications page for "([^"]*)"$/
+      product = Service.find_by!(name: $1)
+      admin_service_applications_path(product)
 
     when /^the provider side edit page for application "([^"]*)" of buyer "([^"]*)"$/
       application = Account.find_by_org_name!($2).bought_cinstances.find_by_name!($1)
@@ -633,10 +627,17 @@ World(Module.new do
       admin_service_metrics_path(provider_first_service!)
     when /^the integration show page for (service ".+?")/
       admin_service_integration_path(Transform $1)
+    when /^the mapping rules index page for (service ".+?")/
+      admin_service_proxy_rules_path(Transform $1)
+    when /^the mapping rules index page for backend "(.+?)"/
+      provider_admin_backend_api_mapping_rules_path(BackendApi.find_by!(name: $1))
+    when /^the create mapping rule page for (service ".+?")/
+      new_admin_service_proxy_rule_path(Transform $1)
+    when /^the create mapping rule page for backend "(.+?)"/
+      new_provider_admin_backend_api_mapping_rule_path(BackendApi.find_by!(name: $1))
     when /^the integration page for (service ".+?")/
+      # TODO: THREESCALE-3759 edit page no longer exist, remove or replace
       edit_admin_service_integration_path(Transform $1)
-    when 'the service integration page'
-      edit_admin_service_integration_path(provider_first_service!)
 
     when 'the 404 page'
       '/the-404-page'
@@ -644,6 +645,8 @@ World(Module.new do
     # Backend API
     when /^the backend api overview/
       provider_admin_backend_api_path(provider_first_service!.backend_api)
+    when /^the overview page of backend "(.+?)"/
+      provider_admin_backend_api_path(BackendApi.find_by!(name: $1))
 
     #
     # Help

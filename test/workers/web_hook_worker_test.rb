@@ -7,6 +7,10 @@ class WebHookWorkerTest < ActiveSupport::TestCase
     @worker = WebHookWorker.new
   end
 
+  test 'heandled errors' do
+    assert_same_elements [SocketError, RestClient::Exception, Errno::ECONNREFUSED, Errno::ECONNRESET],  WebHookWorker::HANDLED_ERRORS
+  end
+
   class TransactionalTest < ActiveSupport::TestCase
     disable_transactional_fixtures!
 

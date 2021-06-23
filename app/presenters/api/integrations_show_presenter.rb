@@ -53,31 +53,6 @@ class Api::IntegrationsShowPresenter
     end
   end
 
-  def apiap?
-    provider_can_use? :api_as_product
-  end
-
-  def apicast_config_ready?
-    if apiap?
-      proxy.service.backend_apis.any?
-    else
-      any_sandbox_configs?
-    end
-  end
-
-  def test_state_modifier
-    return 'is-untested' if @proxy.account.provider_can_use?(:api_as_product)
-
-    case @proxy.api_test_success
-    when true
-      'is-successful'
-    when false
-      'is-erroneous'
-    else
-      'is-untested'
-    end
-  end
-
   delegate :pending_affecting_changes?, :service, to: :proxy
 
   private :proxy

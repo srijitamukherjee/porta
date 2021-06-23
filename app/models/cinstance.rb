@@ -1,7 +1,9 @@
 class Cinstance < Contract
-  include ArchiveDeletionBelongingToService
+  include SaveDestroyForServiceAssociation
   # Maximum number of cinstances permitted between provider and buyer
   MAX = 10
+
+  self.background_deletion = [:referrer_filters, :application_keys, [:alerts, { action: :delete }]]
 
   delegate :backend_version, to: :service, allow_nil: true
 
@@ -25,7 +27,6 @@ class Cinstance < Contract
   before_create :set_service_id
   before_validation :set_service_id
   before_create :set_provider_public_key
-  before_create :set_end_user_required_from_plan
   before_create :accept_on_create, :unless => :live?
 
   attr_readonly :service_id
@@ -51,8 +52,8 @@ class Cinstance < Contract
   include Finance::VariableCost
   include Logic::Authentication::ApplicationContract
   include Logic::Keys::ApplicationContract
-  include Logic::EndUsers::ApplicationContract
 
+  include AccountIndex::ForDependency
   include ThreeScale::Search::Scopes
 
   def self.attributes_for_destroy_list
@@ -105,8 +106,6 @@ class Cinstance < Contract
   validate :user_key_is_unique, unless: :provider_can_duplicate_user_key?
 
   validates :user_key, uniqueness: { scope: [:service_id] }, if: :provider_can_duplicate_user_key?
-
-  validate :end_users_switch
 
   validate :same_service, on: :update, if: :plan_id_changed?
 
@@ -240,7 +239,7 @@ class Cinstance < Contract
 
   # Shortcut for plan.service.metrics
   def metrics
-    service && service.metrics
+    service && service.all_metrics
   end
 
   # Is this cinstance bought by an account?
@@ -317,7 +316,6 @@ class Cinstance < Contract
       xml.user_account_id user_account_id
       xml.first_traffic_at first_traffic_at.try(:xmlschema)
       xml.first_daily_traffic_at first_daily_traffic_at.try(:xmlschema)
-      xml.end_user_required end_user_required
       xml.service_id service.id if service.present?
       if service.backend_version.v1?
         xml.user_key( user_key )
@@ -391,6 +389,9 @@ class Cinstance < Contract
   def app_plan_change_should_request_credit_card?
     service.plan_change_permission(ApplicationPlan) == :request_credit_card
   end
+
+  alias account_for_sphinx user_account
+  protected :account_for_sphinx
 
   protected
 
@@ -496,13 +497,6 @@ class Cinstance < Contract
 
   scope :without_ids, ->(id) { where(["#{table_name}.id <> ?", id]) }
 
-  def set_end_user_required_from_plan
-    if end_user_required.nil?
-      self.end_user_required = plan.try!(:end_user_required)
-    end
-    true
-  end
-
   def set_user_key
     self.user_key ||= generate_key
   end
@@ -518,15 +512,6 @@ class Cinstance < Contract
   def generate_key
     #FIXME: service is not accessible here yet
     plan.issuer.prefix_key(SecureRandom.hex(16))
-  end
-
-  def end_users_switch
-    return unless plan
-    switch = plan.issuer.account.settings.end_users
-
-    if end_user_required && (not switch.allowed?)
-      errors.add(:end_user_required, :not_allowed)
-    end
   end
 end
 

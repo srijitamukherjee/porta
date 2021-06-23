@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-#this is tested in unit/account_test
 module Fields::Fields
   extend ActiveSupport::Concern
 
@@ -120,14 +119,11 @@ module Fields::Fields
       # when creating first provider there is no fields definitions source
       # maybe because of factories, maybe because of sun eruptions
       if fields_definitions_source_root
-        extra_field_names = defined_extra_fields.map(&:name)
-        new_attributes = attributes.slice!(*extra_field_names)
-        self.extra_fields = attributes
-      else
-        new_attributes = attributes
+        fields_attributes = attributes.extract!(*defined_extra_fields_names)
+        self.extra_fields = fields_attributes
       end
 
-      super(new_attributes, options)
+      super(attributes, options)
     end
 
     alias attributes= assign_attributes
@@ -261,6 +257,10 @@ module Fields::Fields
 
   def defined_extra_fields
     defined_fields - defined_builtin_fields
+  end
+
+  def defined_extra_fields_names
+    defined_extra_fields.map(&:name)
   end
 
   def defined_fields_hash

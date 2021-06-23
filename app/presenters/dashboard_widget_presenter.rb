@@ -1,14 +1,16 @@
 class DashboardWidgetPresenter
   include ::Draper::ViewHelpers
 
-  attr_reader :name, :params, :value, :previous_value, :percentual_change, :has_history, :current
+  attr_reader :name, :params, :variables, :value, :previous_value, :percentual_change, :has_history, :current
 
   # TODO: clearly this should be just one attribute, and controllers should inject own structure
   attr_reader :chart, :items
 
-  def initialize(name, params = {})
+  def initialize(name, params = {}, variables = {})
     @name = name
-    @params = params.freeze
+    @params = params.respond_to?(:permit!) ? params.dup.permit! : params
+    @params = @params.symbolize_keys.with_indifferent_access
+    @variables = variables
     @data = nil
     @value = spinner
     @previous_value = nil
@@ -29,7 +31,7 @@ class DashboardWidgetPresenter
   end
 
   def url(params = self.params)
-    h.polymorphic_url([:provider, :admin, :dashboard, name], params)
+    h.polymorphic_url([:provider, :admin, :dashboard, name], params.symbolize_keys)
   end
 
   def path
@@ -41,7 +43,7 @@ class DashboardWidgetPresenter
   end
 
   def id
-    "dashboard-widget-#{params.to_a.join('-')}#{name}"
+    "dashboard-widget-#{params.to_h.to_a.join('-')}#{name}"
   end
 
   def template_name
@@ -78,6 +80,6 @@ class DashboardWidgetPresenter
   end
 
   def locals
-    { widget: self }
+    { widget: self }.merge(variables)
   end
 end

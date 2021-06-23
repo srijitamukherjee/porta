@@ -1,14 +1,10 @@
+# frozen_string_literal: true
 
 module Stats
   class Storage < Backend::Storage
     include ::Stats::KeyHelpers
-    include ::ThreeScale::MethodTracing
     include ActiveSupport::Benchmarkable
     delegate :logger, to: :Rails
-
-    # TODO: - join with stats/views/usage
-    #
-    ALLOWED_GRANULARITIES = [ 6.hours, :hour, :day, :month ].freeze
 
     def values_in_range(range, granularity, prefix)
       # TODO: - refactor, isolate to strategies?
@@ -26,7 +22,8 @@ module Stats
           mget(*keys).map(&:to_i)
         end
       else
-        raise InvalidParameterError, "Granularity #{options[:granularity]} not allowed (use #{ALLOWED_GRANULARITIES.inspect})"
+        raise InvalidParameterError,
+              "Granularity #{options[:granularity]} not allowed (use #{Stats::Views::Usage::ALLOWED_GRANULARITIES.inspect})"
       end
     end
 
@@ -72,7 +69,6 @@ module Stats
         ActiveSupport::OrderedHash.new
       end
     end
-    add_three_scale_method_tracer :ordered_hash
 
     protected
 
@@ -209,7 +205,6 @@ module Stats
         end
       end
     end
-    add_three_scale_method_tracer :compute_timeshift_deltas
 
     # Gets keys in given range for :granularity supplied in options
     #
@@ -229,8 +224,6 @@ module Stats
         end
       end
     end
-
-    add_three_scale_method_tracer :keys_for_range
 
     def granularity_to_seconds(g)
       (g.is_a?(Symbol) || g.is_a?(String)) ? 1.public_send(g) : g

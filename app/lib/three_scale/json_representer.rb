@@ -1,6 +1,7 @@
+# frozen_string_literal: true
+
 require 'roar/json'
 require 'roar/hypermedia'
-require_dependency 'three_scale/representer'
 
 module ThreeScale::JSONRepresenter
   extend ActiveSupport::Concern
@@ -35,7 +36,7 @@ module ThreeScale::JSONRepresenter
       wraps_resource name
 
       self.instance_eval do
-        include Representable::JSON::Collection
+        include ThreeScale::CollectionRepresenter::JSONCollection
         include ThreeScale::CollectionRepresenter::XMLCollection
       end
     end

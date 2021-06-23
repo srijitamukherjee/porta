@@ -1,4 +1,4 @@
-require_dependency 'csv/exporter'
+# frozen_string_literal: true
 
 module Stats
   module Views

@@ -17,10 +17,14 @@ module BackendApiLogic
       validates :backend_api, nested_association: {report: {private_endpoint: :api_backend}}, associated: true, if: :validate_backend_api?
     end
 
+    def api_backend_present?
+      api_backend
+    end
+
     protected
 
     def validate_backend_api?
-      !account.provider_can_use?(:api_as_product) || backend_api.private_endpoint_changed?
+      backend_api.private_endpoint_changed?
     end
 
     def save_backend_api

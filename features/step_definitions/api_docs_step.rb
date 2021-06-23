@@ -1,48 +1,25 @@
 # frozen_string_literal: true
 
 Given(/^provider "(.*?)" has a swagger 1.0$/) do | org_name |
-  provider = Account.providers.find_by_org_name org_name
+  provider = Account.providers.find_by org_name: org_name
 
   active_docs = provider.api_docs_services.build name: "Echo"
   active_docs.published = true
-  active_docs.body =<<EOBODY
-{
- "basePath": "https://echo-api.3scale.net",
- "apiVersion": "v1",
- "swaggerVersion": "1.0",
- "apis": [
-   {
-     "path": "/hello",
-     "operations": [
-       {
-         "httpMethod": "GET",
-         "summary": "Say Hello!",
-         "description": "This operation says hello.",
-         "nickname": "hello",
-         "group": "words",
-         "type": "string",
-         "parameters": [
-           {
-             "name": "user_key",
-             "description": "Your API access key",
-             "type": "string",
-             "paramType": "query",
-             "threescale_name": "user_keys"
-           }
-         ]
-       }
-     ]
-   }
- ]
-}
-EOBODY
+  active_docs.body = file_fixture('swagger/echo-api-1.0.json')
   assert active_docs.save
 end
 
 Given(/^provider "(.*?)" has the swagger example of signup$/) do |arg1|
   active_docs = @provider.api_docs_services.build name: "Echo"
   active_docs.published = true
-  active_docs.body = Logic::ProviderSignup::SampleData::ECHO_SERVICE
+  active_docs.body = file_fixture('swagger/echo-api-2.0.json')
+  assert active_docs.save
+end
+
+Given(/^provider "(.*?)" has the oas3 simple example$/) do |arg1|
+  active_docs = @provider.api_docs_services.build name: "Echo"
+  active_docs.published = true
+  active_docs.body = file_fixture('swagger/echo-api-3.0.json')
   assert active_docs.save
 end
 
@@ -61,6 +38,28 @@ Then(/^swagger should escape properly the curl string$/) do
   end
 end
 
+Then(/^swagger v3 should escape properly the curl string$/) do
+  id = 'default' # Could be passed as arg
+  section_id = "#operations-tag-#{id}"
+
+  closed_section = find("#{section_id}[data-is-open='false']")
+  closed_section.click
+
+  method_id = "#operations-#{id}-get_"
+  closed_method = find(method_id)
+  closed_method.click
+
+  within method_id do
+    click_on 'Try it out'
+    input_name = 'user_key'
+    input = find("[data-param-name='#{input_name}'] input")
+    input.set 'Authorization: Oauth:"test"'
+
+    click_on 'Execute'
+
+    find('textarea.curl').should have_content('-H Authorization: Oauth:\"test\"')
+  end
+end
 
 When(/^I delete the API Spec$/) do
   page.driver.accept_modal(:confirm) do

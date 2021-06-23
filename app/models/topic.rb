@@ -1,9 +1,12 @@
 class Topic < ApplicationRecord
+  include PermalinkFu
 
   acts_as_taggable
 
   include ThreeScale::SpamProtection::Integration::Model
   has_spam_protection
+
+  include TopicIndex
 
   ORDER_BY = [['Newest post', ''], ["Most views", "hits"], ["Number of posts", "posts_count"]]
 
@@ -29,7 +32,7 @@ class Topic < ApplicationRecord
   has_many :posts, -> { oldest_first }, :dependent => :delete_all
   has_one  :recent_post, -> { latest_first }, :class_name => 'Post'
 
-  has_many :voices, -> { uniq }, :through => :posts, :source => :user
+  has_many :voices, -> { distinct }, :through => :posts, :source => :user
 
   has_many :user_topics, :dependent => :destroy
   has_many :subscribers, :through => :user_topics, :source => :user
@@ -64,7 +67,7 @@ class Topic < ApplicationRecord
 
   attr_readonly :posts_count, :hits
 
-  has_permalink :title, :scope => :forum_id
+  permalink :title, scope: :forum_id
 
   module Search
     def smart_search(*args)

@@ -1,46 +1,31 @@
 // @flow
 
-export type RawPolicy = {
-  $schema?: string,
-  id: number,
+// eslint-disable-next-line flowtype/no-weak-types
+export type Configuration = Object
+
+// Represents the data stored for @proxy.policies_config
+export type PolicyConfig = {
   name: string,
+  configuration: Configuration,
   version: string,
-  description?: string,
-  summary?: string,
-  configuration: Object
-}
-
-export type RawRegistry = {
-  [string]: Array<RawPolicy>
-}
-
-export type RegistryPolicy = & RawPolicy & {
-  humanName: string,
-  data?: Object
-}
-
-export type ChainPolicy = & RegistryPolicy & {
   enabled: boolean,
-  removable?: boolean,
-  uuid?: string
 }
 
-export type StoredChainPolicy = {
+// Represents policies of the Registry
+export type RegistryPolicy = {
+  $schema: string,
+  configuration: Configuration,
+  description: [string],
   name: string,
+  summary: string,
   version: string,
-  configuration: Object,
-  enabled: boolean
+  data?: Configuration,
+  humanName: string
 }
 
-export type ShallowPolicy = {
-  id: number,
-  version: string,
-  humanName: string,
-  summary?: string
-}
-export type Schema = Object
-export type Policy = {
-  id: number,
-  schema: Schema,
-  directory: string
+// Represents policies stored in the Chain, once copied from the Registry
+export type ChainPolicy = RegistryPolicy & {
+  uuid: string,
+  enabled: boolean,
+  removable: boolean
 }

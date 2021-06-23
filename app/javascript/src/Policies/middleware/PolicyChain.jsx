@@ -1,26 +1,23 @@
 // @flow
 
-import type { RegistryPolicy, ChainPolicy, StoredChainPolicy } from 'Policies/types/Policies'
-import type { Dispatch, GetState, PolicyChainMiddlewareAction } from 'Policies/types/index'
-
 import { generateGuid } from 'Policies/util'
 import { loadChainSuccess, loadChainError, updatePolicyChain } from 'Policies/actions/PolicyChain'
 import { setOriginalPolicyChain } from 'Policies/actions/OriginalPolicyChain'
 
-function findRegistryPolicy (registry: Array<RegistryPolicy>, storedPolicy: StoredChainPolicy): RegistryPolicy | typeof undefined {
+import type { ChainPolicy, RegistryPolicy, PolicyConfig, Dispatch, GetState, PolicyChainMiddlewareAction } from 'Policies/types'
+
+function findRegistryPolicy (registry: Array<RegistryPolicy>, storedPolicy: PolicyConfig): RegistryPolicy | void {
   return registry.find(policy => (policy.name === storedPolicy.name && policy.version === storedPolicy.version))
 }
 
-function convertToChainPolicy (registryPolicy: RegistryPolicy, storedPolicy: StoredChainPolicy): ChainPolicy {
+function convertToChainPolicy (registryPolicy: RegistryPolicy, storedPolicy: PolicyConfig): ChainPolicy {
   const removable = !(storedPolicy.name === 'apicast')
   return {
     ...registryPolicy,
-    ...{
-      enabled: storedPolicy.enabled,
-      data: storedPolicy.configuration,
-      removable,
-      uuid: generateGuid()
-    }
+    enabled: storedPolicy.enabled,
+    data: storedPolicy.configuration,
+    removable,
+    uuid: generateGuid()
   }
 }
 
@@ -32,10 +29,10 @@ const updatePolicy = (chain: Array<ChainPolicy>, policyConfig: ChainPolicy): Arr
   return chain.map(policy => (policy.uuid === policyConfig.uuid) ? policyConfig : policy)
 }
 
-const loadChain = ({registry, storedChain, dispatch}: {registry: Array<RegistryPolicy>, storedChain: Array<StoredChainPolicy>, dispatch: Dispatch}) => {
+const loadChain = ({registry, policiesConfig, dispatch}: {registry: Array<RegistryPolicy>, policiesConfig: Array<PolicyConfig>, dispatch: Dispatch}) => {
   let errors = 0
   let updatedChain: Array<ChainPolicy> = []
-  storedChain.forEach(storedPolicy => {
+  policiesConfig.forEach(storedPolicy => {
     const foundRegistryPolicy = findRegistryPolicy(registry, storedPolicy)
     foundRegistryPolicy
       ? updatedChain.push(convertToChainPolicy(foundRegistryPolicy, storedPolicy))
@@ -43,17 +40,18 @@ const loadChain = ({registry, storedChain, dispatch}: {registry: Array<RegistryP
   })
   if (errors > 0) {
     dispatch(loadChainError({})) // TODO: Define what to do with errors (unlikely now, just undefined path returned by Array.find)
-  } else {
-    dispatch(setOriginalPolicyChain(updatedChain))
-    dispatch(loadChainSuccess(updatedChain))
   }
+
+  dispatch(setOriginalPolicyChain(updatedChain))
+  dispatch(loadChainSuccess(updatedChain))
 }
 
-const policyChainMiddleware = ({ dispatch, getState }: { dispatch: Dispatch, getState: GetState }) => (next: any) => (action: PolicyChainMiddlewareAction) => {
+// $FlowIgnore[signature-verification-failure] no need to verify
+const policyChainMiddleware = ({ dispatch, getState }: { dispatch: Dispatch, getState: GetState }) => (next: Dispatch) => (action: PolicyChainMiddlewareAction) => {
   const state = getState()
   switch (action.type) {
     case 'LOAD_CHAIN':
-      loadChain({registry: state.registry, storedChain: action.storedChain, dispatch})
+      loadChain({registry: state.registry, policiesConfig: action.policiesConfig, dispatch})
       break
     case 'REMOVE_POLICY_FROM_CHAIN':
       dispatch(updatePolicyChain(removePolicy(state.chain, action.policy)))

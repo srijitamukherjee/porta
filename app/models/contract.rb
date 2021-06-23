@@ -5,7 +5,6 @@ class Contract < ApplicationRecord
   self.table_name = 'cinstances'
 
   audited allow_mass_assignment: true
-  include ::ThreeScale::MethodTracing
 
   # FIXME: This class should be an abstract class I think, but doing so makes plenty of tests fail
   # self.abstract_class = true
@@ -63,6 +62,12 @@ class Contract < ApplicationRecord
     where.has { plan_id.in( scope ) }
   end
 
+  scope :permitted_for, ->(user) {
+    next all unless user.forbidden_some_services?
+
+    where(service_id: user.member_permission_service_ids)
+  }
+
   # Return contracts bought by given account.
   scope :bought_by, ->(account) {
     where({:user_account_id => account.id})
@@ -86,14 +91,14 @@ class Contract < ApplicationRecord
     where.has { name.op('COLLATE', sql(collate)).matches(pattern)}
   }
 
-  scope :by_account, ->(account) { where.has { user_account_id == account } }
+  scope :by_account, ->(account_id) { where.has { user_account_id == account_id } }
   scope :by_account_query, ->(query) { where( { :user_account_id => Account.buyers.search_ids(query) } ) }
 
   scope :have_paid_on, ->(paid_date) { where.has { (paid_until >= paid_date) | (variable_cost_paid_until >= paid_date) } }
 
   def self.by_plan_type(type)
 
-    plans = Plan.unscoped.uniq.joins { pricing_rules.outer }
+    plans = Plan.unscoped.distinct.joins { pricing_rules.outer }
 
     plan_type = case type.to_s
                 when 'free'
@@ -247,15 +252,6 @@ class Contract < ApplicationRecord
 
   protected
 
-  def update_counter_cache?(association_name)
-    case association_name
-    when :plan
-      !provider_account&.scheduled_for_deletion? && !issuer&.deleted?
-    else
-      true
-    end
-  end
-
   def correct_plan_subclass?
     if plan && (not plan.is_a?(Plan))
       errors.add(:plan, 'wrong plan subclass')
@@ -297,7 +293,6 @@ class Contract < ApplicationRecord
     end
   end
 
-  add_three_scale_method_tracer :change_plan_internal
 
   private
 
@@ -328,7 +323,8 @@ class Contract < ApplicationRecord
   end
 
   def destroy_customized_plan
-    plan.destroy if plan.try!(:customized?)
+    return if !plan || !plan.customized? || plan.scheduled_for_deletion?
+    plan.destroy
   end
 
   def accept_on_create

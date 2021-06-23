@@ -1,9 +1,9 @@
 // @flow
 
 import { initialState } from 'Policies/reducers/initialState'
-import { createReducer, generateGuid, updateArray } from 'Policies/util'
-import type { ChainState } from 'Policies/types/State'
-import type { ChainPolicy, RegistryPolicy } from 'Policies/types/Policies'
+import { createReducer, generateGuid } from 'Policies/util'
+
+import type { Reducer, ChainPolicy, RegistryPolicy } from 'Policies/types'
 import type {
   AddPolicyToChainAction,
   FetchChainSuccessAction,
@@ -14,25 +14,23 @@ import type {
 export type UpdateChainPolicies = FetchChainSuccessAction | SortPolicyChainAction
 
 function createChainPolicy (policy: RegistryPolicy): ChainPolicy {
-  return {...policy, ...{humanName: policy.humanName, enabled: true, removable: true, uuid: generateGuid()}}
+  return {...policy, humanName: policy.humanName, enabled: true, removable: true, uuid: generateGuid()}
 }
 
-function addPolicy (state: ChainState, action: AddPolicyToChainAction): ChainState {
+function addPolicy (state: Array<ChainPolicy>, action: AddPolicyToChainAction): Array<ChainPolicy> {
   return state.concat([createChainPolicy(action.policy)])
 }
 
-function updateChain (_state: ChainState, action: UpdatePolicyChainAction): ChainState {
+function updateChain (_state: Array<ChainPolicy>, action: UpdatePolicyChainAction): Array<ChainPolicy> {
   return action.payload
 }
 
-function updatePolicies (state: ChainState, action: UpdateChainPolicies): ChainState {
-  return updateArray(state, action.payload)
+function updatePolicies (state: Array<ChainPolicy>, action: UpdateChainPolicies): Array<ChainPolicy> {
+  return [...[], ...action.payload]
 }
 
-// eslint-disable-next-line space-infix-ops
-// const ChainReducer = createReducer<ChainState>(initialState.chain, {
-// $FlowFixMe TODO: in order to fully type createReducer, set UIState and re-enable flow. (use lines above)
-const ChainReducer = createReducer(initialState.chain, {
+// TODO: use combineReducers instead of createReducer
+const ChainReducer: Reducer<Array<ChainPolicy>> = createReducer<Array<ChainPolicy>>(initialState.chain, {
   'ADD_POLICY_TO_CHAIN': addPolicy,
   'SORT_POLICY_CHAIN': updatePolicies,
   'LOAD_CHAIN_SUCCESS': updatePolicies,
